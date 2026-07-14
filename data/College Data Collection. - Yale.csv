@@ -1,0 +1,84 @@
+University,US NEWS Ranking,College,Majors in that college,College Specific Acceptance Rate,Description for Majors
+Yale,4,Yale College,,Yale college,
+,,,African Studies (B.A.),8–9%,"Interdisciplinary study of the languages, history, politics, and cultures of the African continent"
+,,,American Studies (B.A.),6–7%,"Interdisciplinary examination of the culture, history, and society of the United States"
+,,,Anthropology (B.A.),5–6%,"Study of human societies, cultures, and biological development across time and place"
+,,,Applied Mathematics (B.A. or B.S.),4–5%,"Use of mathematical theory and methods to solve problems in science, engineering, and beyond"
+,,,Applied Physics (B.S.),4–5%,Application of physics principles to engineering problems and emerging technologies
+,,,Archaeological Studies (B.A.),8–9%,Study of past human societies through their material remains and interdisciplinary methods
+,,,Architecture (B.A.),5–6%,"Study of the design, history, and theory of the built environment"
+,,,Art (B.A.),7–9%,"Studio-based study of artistic practice across media such as painting, sculpture, and photography"
+,,,Astronomy (B.A.),6–7%,Study of celestial objects and the physical processes of the universe
+,,,Astrophysics (B.S.),4–5%,"Physics-intensive study of the structure, formation, and evolution of stars, galaxies, and the cosmos"
+,,,Biomedical Engineering (B.S.),3–4%,"Application of engineering principles to medicine, biology, and human health"
+,,,Black Studies (B.A.),7–8%,"Interdisciplinary study of the histories, cultures, and experiences of people of African descent"
+,,,Chemical Engineering (B.S.),5–6%,Engineering that applies chemistry and physics to design processes that transform materials
+,,,Chemistry (B.A. or B.S.),5–6%,"Study of the composition, structure, properties, and reactions of matter"
+,,,Classical Civilization (B.A.),8–9%,"Study of ancient Greek and Roman culture, literature, and history in translation"
+,,,Classics (B.A.),7–8%,"Study of the languages, literature, and history of ancient Greece and Rome"
+,,,Cognitive Science (B.A. or B.S.),4–5%,"Interdisciplinary study of the mind, drawing on psychology, philosophy, linguistics, and computer science"
+,,,Comparative Literature (B.A.),6–7%,"Study of literature across languages, cultures, and traditions, with emphasis on theory and translation"
+,,,Computer Science (B.A. or B.S.),3–4%,"Study of computation, algorithms, software systems, and their applications"
+,,,Computer Science and Economics (B.S.),3–4%,"Combined study of computation and economic theory, including markets and incentives"
+,,,Computer Science and Mathematics (B.S.),3–4%,Combined major joining computational methods with rigorous mathematical theory
+,,,Computer Science and Psychology (B.A.),4–5%,"Combined study of computation and the science of mind, cognition, and behavior"
+,,,Computing and Linguistics (B.A. or B.S.),4–5%,Joins computer science with the scientific study of language
+,,,Computing and the Arts (B.A.),5–6%,"Combines computer science with creative practice in art, music, or design"
+,,,Earth and Planetary Sciences (B.A. or B.S.),6–7%,"Study of the Earth, planets, and the processes shaping them"
+,,,East Asian Languages and Literatures (B.A.),8–10%,"Study of the languages and literary traditions of China, Japan, and Korea"
+,,,East Asian Studies (B.A.),6–7%,"Interdisciplinary study of the societies, politics, and cultures of East Asia"
+,,,Ecology and Evolutionary Biology (B.A. or B.S.),5–6%,"Study of organisms, their interactions, and the processes of evolution"
+,,,Economics (B.A.),3–4%,"Study of how individuals, firms, and societies allocate resources and respond to incentives"
+,,,Economics and Mathematics (B.A.),4–5%,Combined major applying rigorous mathematics to economic theory and analysis
+,,,Electrical Engineering (B.S.),4–5%,"Study of electrical systems, circuits, signals, and electronic devices"
+,,,Electrical Engineering and Computer Science (B.S.),3–4%,"Combined major spanning hardware, electronics, and computational systems"
+,,,Engineering Sciences (Chemical) (B.S.),5–6%,Broad engineering degree emphasizing chemical processes and applications
+,,,Engineering Sciences (Electrical) (B.A. or B.S.),5–6%,Broad engineering degree emphasizing electrical systems and devices
+,,,Engineering Sciences (Environmental) (B.A.),6–7%,Engineering focused on environmental systems and sustainability challenges
+,,,Engineering Sciences (Mechanical) (B.A. or B.S.),5–6%,Broad engineering degree emphasizing mechanical systems and design
+,,,English (B.A.),5–6%,Study of literature in English alongside critical analysis and writing
+,,,Environmental Engineering (B.S.),5–6%,"Application of engineering to protect and manage air, water, and land resources"
+,,,Environmental Studies (B.A. or B.S.),5–6%,"Interdisciplinary study of environmental problems through science, policy, and the humanities"
+,,,"Ethics, Politics, and Economics (B.A.)",3–4%,"Interdisciplinary major integrating philosophy, political science, and economics"
+,,,"Ethnicity, Race, and Migration (B.A.)",6–7%,"Study of race, ethnicity, and migration across societies and histories"
+,,,Film and Media Studies (B.A.),6–7%,"Study of film, media, and their cultural, historical, and theoretical dimensions"
+,,,French (B.A.),8–10%,"Study of French language, literature, and Francophone cultures"
+,,,German Studies (B.A.),8–10%,"Study of German language, literature, thought, and culture"
+,,,Global Affairs (B.A.),3–4%,"Interdisciplinary study of international policy, governance, and global challenges"
+,,,"Greek, Ancient and Modern (B.A.)",9–10%,Study of the Greek language and literature from antiquity to the present
+,,,History (B.A.),5–6%,Study of the human past across regions and eras using primary sources
+,,,History of Art (B.A.),6–7%,Study of visual art and architecture in historical and cultural context
+,,,"History of Science, Medicine, and Public Health (B.A.)",6–7%,"Study of how science, medicine, and health have developed in society"
+,,,Humanities (B.A.),6–7%,"Interdisciplinary study of texts, ideas, and cultures across the humanistic disciplines"
+,,,Italian Studies (B.A.),8–10%,"Study of Italian language, literature, and culture"
+,,,Jewish Studies (B.A.),8–9%,"Interdisciplinary study of Jewish history, religion, languages, and culture"
+,,,Latin American Studies (B.A.),7–8%,"Interdisciplinary study of the cultures, politics, and history of Latin America"
+,,,Linguistics (B.A.),5–6%,"Scientific study of language structure, sound, meaning, and use"
+,,,Mathematics (B.A. or B.S.),4–5%,Study of pure and applied mathematics and rigorous logical reasoning
+,,,Mathematics and Philosophy (B.A.),5–6%,"Combined study of mathematical reasoning and philosophical analysis, including logic"
+,,,Mathematics and Physics (B.S.),4–5%,Combined major joining advanced mathematics with theoretical and experimental physics
+,,,Mechanical Engineering (B.S.),4–5%,"Study of the design, analysis, and manufacture of mechanical systems"
+,,,Modern Middle East Studies (B.A.),7–8%,"Interdisciplinary study of the societies, politics, and cultures of the modern Middle East"
+,,,Molecular Biophysics and Biochemistry (B.A. or B.S.),4–5%,Study of the molecular foundations of biological systems
+,,,"Molecular, Cellular, and Developmental Biology (B.A. or B.S.)",4–5%,"Study of life at the molecular, cellular, and developmental levels"
+,,,Music (B.A.),7–9%,"Study of music through theory, history, composition, and performance"
+,,,Near Eastern Languages and Civilizations (B.A.),8–10%,"Study of the languages, history, and cultures of the ancient and modern Near East"
+,,,Neuroscience (B.A. or B.S.),3–4%,"Study of the nervous system, brain, and the biological basis of behavior"
+,,,Philosophy (B.A.),5–6%,"Study of fundamental questions of knowledge, reality, ethics, and logic"
+,,,Physics (B.S.),4–5%,"Study of the fundamental laws governing matter, energy, space, and time"
+,,,Physics and Geosciences (B.S.),6–7%,Combined major applying physics to the study of the Earth and planetary systems
+,,,Physics and Philosophy (B.A. or B.S.),5–6%,Combined study of physical theory and the philosophical foundations of science
+,,,Political Science (B.A.),4–5%,"Study of government, political behavior, institutions, and international relations"
+,,,Portuguese (B.A.),9–10%,Study of Portuguese language and the literatures and cultures of the Lusophone world
+,,,Psychology (B.A. or B.S.),4–5%,"Scientific study of the mind, brain, and behavior"
+,,,Religious Studies (B.A.),8–10%,"Study of religious traditions, texts, and practices across cultures and history"
+,,,Russian (B.A.),8–10%,"Study of Russian language, literature, and culture"
+,,,"Russian, East European, and Eurasian Studies (B.A.)",8–9%,"Interdisciplinary study of the region's languages, politics, and cultures"
+,,,Sociology (B.A.),5–6%,"Study of social relationships, institutions, inequality, and society's structure"
+,,,South Asian Studies (second major only),9–10%,"Interdisciplinary study of the languages, cultures, and history of South Asia"
+,,,Spanish (B.A.),7–9%,Study of Spanish language and the literatures and cultures of the Spanish-speaking world
+,,,Special Divisional Major (B.A. or B.S.),N/A (created after enrollment),A student-designed major created after enrollment for interests not covered by existing programs
+,,,Statistics and Data Science (B.A. or B.S.),3–4%,"Study of methods for collecting, analyzing, and interpreting data"
+,,,"Theater, Dance, and Performance Studies (B.A.)",7–9%,"Study and practice of theater, dance, and performance in cultural context"
+,,,Urban Studies (B.A.),5–6%,"Interdisciplinary study of cities, urban life, and the built environment"
+,,,"Women’s, Gender, and Sexuality Studies (B.A.)",7–8%,"Interdisciplinary study of gender, sexuality, and their social and historical dimensions"
