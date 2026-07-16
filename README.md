@@ -13,24 +13,29 @@ top U.S. universities, with real acceptance rates and rankings.
 
 ## Setup
 
-### Backend
+One-time install (backend venv + root + frontend deps):
 
 ```bash
-cd backend
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python app.py   # runs on http://localhost:5001
-```
-
-### Frontend
-
-```bash
-cd frontend
+python3 -m venv backend/.venv
+backend/.venv/bin/pip install -r backend/requirements.txt
 npm install
-npm run dev               # runs on http://localhost:5173, proxies /api to :5001
+npm install --prefix frontend
 ```
 
-Then open http://localhost:5173.
+### Run both at once
+
+```bash
+npm run dev:all
+```
+
+Backend on http://localhost:5001, frontend on http://localhost:5173 (proxies `/api` to the backend).
+
+### Or run separately
+
+```bash
+npm run dev:backend    # Flask on :5001
+npm run dev:frontend   # Vite on :5173
+```
 
 ## How matching works
 
