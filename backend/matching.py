@@ -178,19 +178,61 @@ def _cosine(a, b):
     return dot / (na * nb)
 
 
+def _score_from_test(value, kind):
+    """Map SAT/ACT numeric answers onto a 0..1 strength contribution."""
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return None
+    if kind == "sat":
+        if n < 400 or n > 1600:
+            return None
+        # 1000 -> ~0.35, 1400 -> ~0.8, 1550+ -> ~0.98
+        return max(0.2, min(1.0, (n - 900) / 650))
+    if kind == "act":
+        if n < 1 or n > 36:
+            return None
+        return max(0.2, min(1.0, (n - 18) / 18))
+    if kind == "gpa":
+        if n < 0 or n > 4.0:
+            return None
+        return max(0.2, min(1.0, (n - 2.5) / 1.5))
+    return None
+
+
 def build_student_profile(answers, questions_by_id):
     """Turn raw quiz answers into an interest vector + academic/preference info.
 
-    `answers` maps question id -> selected option id (or value for sliders).
+    `answers` maps question id -> option id, numeric string, or free text.
+    Unknown / AI-only question ids are ignored for scoring.
     """
     interest = {dim: 0.0 for dim in DIMENSIONS}
     strength_points = []
     prefs = {}
+    written = {}
 
     for qid, answer in answers.items():
+        if answer is None or answer == "":
+            continue
         question = questions_by_id.get(qid)
         if question is None:
+            # Preserve free-text / AI answers for downstream AI features.
+            if isinstance(answer, str) and len(answer) > 1:
+                written[qid] = answer
             continue
+
+        qtype = question.get("type", "single")
+        if qtype == "number":
+            meta = question.get("input") or {}
+            mapped = _score_from_test(answer, meta.get("strength_map"))
+            if mapped is not None:
+                strength_points.append(mapped)
+            continue
+
+        if qtype == "text":
+            written[qid] = str(answer)
+            continue
+
         option = None
         for opt in question.get("options", []):
             if opt["id"] == answer:
@@ -207,9 +249,13 @@ def build_student_profile(answers, questions_by_id):
             prefs[key] = value
 
     interest = {k: v for k, v in interest.items() if v > 0}
-    # Academic strength on 0..1, defaulting to the middle if unanswered.
     strength = sum(strength_points) / len(strength_points) if strength_points else 0.5
-    return {"interest": interest, "strength": strength, "prefs": prefs}
+    return {
+        "interest": interest,
+        "strength": strength,
+        "prefs": prefs,
+        "written": written,
+    }
 
 
 def _selectivity_fit(program, strength):

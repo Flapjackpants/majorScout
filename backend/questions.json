@@ -1,450 +1,277 @@
 {
   "sections": [
-    { "id": "interests", "title": "Interests", "blurb": "What genuinely pulls you in?" },
-    { "id": "academics", "title": "Academics", "blurb": "Your classroom track record." },
-    { "id": "testing", "title": "Test Scores", "blurb": "Where you stand on standardized tests." },
-    { "id": "extracurriculars", "title": "Extracurriculars", "blurb": "What you do outside class." },
-    { "id": "preferences", "title": "Preferences", "blurb": "The kind of school you want." }
+    {
+      "id": "stats",
+      "title": "Extracurriculars & Stats",
+      "blurb": "Your activities, scores, and academic standing.",
+      "accent": "orange",
+      "icon": "bolt"
+    },
+    {
+      "id": "interests",
+      "title": "Interests",
+      "blurb": "What genuinely pulls you in — subjects, problems, and passions.",
+      "accent": "rose",
+      "icon": "target"
+    },
+    {
+      "id": "personality",
+      "title": "Personality & Lifestyle",
+      "blurb": "How you work, live, and thrive day to day.",
+      "accent": "sky",
+      "icon": "brain"
+    },
+    {
+      "id": "other",
+      "title": "Other",
+      "blurb": "Campus preferences and what matters most in a program.",
+      "accent": "emerald",
+      "icon": "heart"
+    }
   ],
   "questions": [
     {
       "id": "q1",
-      "section": "interests",
-      "text": "It's a free Saturday afternoon. Which of these sounds most fun?",
-      "options": [
-        { "id": "a", "label": "Building a small app or automating something on my computer", "weights": { "computing": 3, "engineering": 1 } },
-        { "id": "b", "label": "Sketching, painting, or editing a video project", "weights": { "arts": 3 } },
-        { "id": "c", "label": "Reading about history, philosophy, or current events", "weights": { "humanities": 2.5, "social_science": 1 } },
-        { "id": "d", "label": "Watching science documentaries or doing a hands-on experiment", "weights": { "physical_science": 2, "life_science": 2 } }
-      ]
+      "section": "stats",
+      "type": "number",
+      "text": "What's your SAT total score? (Leave blank if you took the ACT instead or haven't tested yet.)",
+      "input": {
+        "min": 400,
+        "max": 1600,
+        "step": 10,
+        "placeholder": "e.g. 1480",
+        "optional": true,
+        "strength_map": "sat"
+      }
     },
     {
       "id": "q2",
-      "section": "interests",
-      "text": "Would you rather debug a computer program or design a poster?",
-      "options": [
-        { "id": "a", "label": "Debug the program — I love figuring out why things break", "weights": { "computing": 3, "math": 1 } },
-        { "id": "b", "label": "Design the poster — visuals and layout excite me", "weights": { "arts": 3 } },
-        { "id": "c", "label": "Honestly, either one sounds fun", "weights": { "computing": 1.5, "arts": 1.5 } },
-        { "id": "d", "label": "Neither — I'd rather work with people than pixels", "weights": { "social_science": 2, "business": 1 } }
-      ]
+      "section": "stats",
+      "type": "number",
+      "text": "What's your ACT composite score? (Leave blank if you used the SAT or haven't tested yet.)",
+      "input": {
+        "min": 1,
+        "max": 36,
+        "step": 1,
+        "placeholder": "e.g. 33",
+        "optional": true,
+        "strength_map": "act"
+      }
     },
     {
       "id": "q3",
-      "section": "interests",
-      "text": "How do you feel about mathematics?",
+      "section": "stats",
+      "type": "single",
+      "text": "Which extracurricular takes up most of your time — and how deep does it go?",
       "options": [
-        { "id": "a", "label": "I love it — proofs and problem sets are genuinely satisfying", "weights": { "math": 3, "physical_science": 1 } },
-        { "id": "b", "label": "I like it as a tool for solving real-world problems", "weights": { "math": 1.5, "engineering": 1.5, "economics": 1 } },
-        { "id": "c", "label": "I can do it, but I wouldn't choose it", "weights": { "social_science": 1, "life_science": 0.5 } },
-        { "id": "d", "label": "I avoid it whenever possible", "weights": { "humanities": 1.5, "arts": 1, "writing": 1 } }
+        {
+          "id": "a",
+          "label": "STEM (robotics, coding, research, olympiads) with leadership or awards",
+          "weights": { "engineering": 2, "computing": 1.5, "math": 1.5 },
+          "strength": 0.9
+        },
+        {
+          "id": "b",
+          "label": "Arts or publications (band, theater, writing, film) with serious commitment",
+          "weights": { "arts": 2.5, "writing": 1.5 },
+          "strength": 0.8
+        },
+        {
+          "id": "c",
+          "label": "Leadership, debate, or service (student government, volunteering)",
+          "weights": { "social_science": 1.5, "business": 1, "economics": 1 },
+          "strength": 0.8
+        },
+        {
+          "id": "d",
+          "label": "I spread time across several activities without one dominant focus",
+          "weights": {},
+          "strength": 0.5
+        }
       ]
     },
     {
       "id": "q4",
       "section": "interests",
-      "text": "A new AI model just made headlines. What's your reaction?",
+      "type": "single",
+      "text": "It's a free Saturday afternoon. Which sounds most fun?",
       "options": [
-        { "id": "a", "label": "I want to understand how it works under the hood", "weights": { "computing": 3, "math": 1.5 } },
-        { "id": "b", "label": "I wonder what it means for jobs, ethics, and society", "weights": { "social_science": 2, "humanities": 1.5, "economics": 1 } },
-        { "id": "c", "label": "I think about the business opportunities it creates", "weights": { "business": 2.5, "economics": 1 } },
-        { "id": "d", "label": "Mild curiosity, but it's not really my thing", "weights": {} }
+        {
+          "id": "a",
+          "label": "Building an app, gadget, or experiment",
+          "weights": { "computing": 2.5, "engineering": 2, "physical_science": 1 }
+        },
+        {
+          "id": "b",
+          "label": "Sketching, writing, filming, or making music",
+          "weights": { "arts": 3, "writing": 1.5 }
+        },
+        {
+          "id": "c",
+          "label": "Reading about people, history, or current events",
+          "weights": { "humanities": 2.5, "social_science": 1.5 }
+        },
+        {
+          "id": "d",
+          "label": "Exploring nature, health, or how living systems work",
+          "weights": { "life_science": 2.5, "health": 1.5, "environment": 1.5 }
+        }
       ]
     },
     {
       "id": "q5",
       "section": "interests",
-      "text": "Which class discussion would you most eagerly join?",
+      "type": "single",
+      "text": "What kind of problem is most satisfying to solve?",
       "options": [
-        { "id": "a", "label": "Whether free will exists", "weights": { "humanities": 3 } },
-        { "id": "b", "label": "How the brain forms memories", "weights": { "life_science": 2, "social_science": 1.5 } },
-        { "id": "c", "label": "Why some economies grow and others stagnate", "weights": { "economics": 3, "social_science": 1 } },
-        { "id": "d", "label": "Whether we could colonize Mars", "weights": { "physical_science": 2.5, "engineering": 1.5 } }
+        {
+          "id": "a",
+          "label": "One with a clear, correct answer I can prove",
+          "weights": { "math": 2.5, "physical_science": 1.5 }
+        },
+        {
+          "id": "b",
+          "label": "One where I build something people actually use",
+          "weights": { "engineering": 2, "computing": 1.5, "business": 1 }
+        },
+        {
+          "id": "c",
+          "label": "One where I change someone's mind or behavior",
+          "weights": { "social_science": 2, "business": 1.5, "writing": 1 }
+        },
+        {
+          "id": "d",
+          "label": "One with no single right answer — interpretation matters",
+          "weights": { "humanities": 2.5, "arts": 1.5 }
+        }
       ]
     },
     {
       "id": "q6",
       "section": "interests",
-      "text": "How much does helping sick or struggling people directly appeal to you as a career?",
+      "type": "single",
+      "text": "Twenty years from now, which achievement would make you proudest?",
       "options": [
-        { "id": "a", "label": "It's my main motivation — medicine or healthcare is the goal", "weights": { "health": 3, "life_science": 1.5 } },
-        { "id": "b", "label": "I care about health, but more at the systems and policy level", "weights": { "health": 2, "economics": 1.5, "social_science": 1 } },
-        { "id": "c", "label": "I'd rather help people in other ways, like teaching or advocacy", "weights": { "social_science": 2, "humanities": 1 } },
-        { "id": "d", "label": "Not a major career driver for me", "weights": {} }
+        {
+          "id": "a",
+          "label": "A discovery or invention that pushed knowledge forward",
+          "weights": { "physical_science": 2, "life_science": 1.5, "engineering": 1.5 }
+        },
+        {
+          "id": "b",
+          "label": "A company or product used by millions",
+          "weights": { "business": 2.5, "computing": 1.5, "economics": 1 }
+        },
+        {
+          "id": "c",
+          "label": "Art, writing, or performances that moved people",
+          "weights": { "arts": 2.5, "writing": 2 }
+        },
+        {
+          "id": "d",
+          "label": "Policy or advocacy that made society fairer or healthier",
+          "weights": { "economics": 2, "social_science": 1.5, "health": 1.5 }
+        }
       ]
     },
     {
       "id": "q7",
-      "section": "interests",
-      "text": "You're handed a broken gadget. What do you do?",
+      "section": "personality",
+      "type": "single",
+      "text": "How do you prefer to work on hard problems?",
       "options": [
-        { "id": "a", "label": "Take it apart immediately — I need to see how it works", "weights": { "engineering": 3, "physical_science": 1 } },
-        { "id": "b", "label": "Look up a repair guide and follow it carefully", "weights": { "engineering": 1.5, "computing": 1 } },
-        { "id": "c", "label": "Find someone who can fix it and watch them do it", "weights": { "social_science": 1 } },
-        { "id": "d", "label": "Replace it — my time is better spent elsewhere", "weights": { "business": 1 } }
+        {
+          "id": "a",
+          "label": "Deep solo focus — headphones on, full immersion",
+          "weights": { "math": 1, "computing": 1, "writing": 0.5 }
+        },
+        {
+          "id": "b",
+          "label": "Pairing or small teams where we bounce ideas quickly",
+          "weights": { "engineering": 1, "business": 1, "social_science": 0.5 }
+        },
+        {
+          "id": "c",
+          "label": "Discussion-heavy seminars and debates",
+          "weights": { "humanities": 1.5, "social_science": 1.5, "economics": 0.5 }
+        },
+        {
+          "id": "d",
+          "label": "Hands-on studios, labs, or workshops",
+          "weights": { "arts": 1.5, "engineering": 1.5, "life_science": 1 }
+        }
       ]
     },
     {
       "id": "q8",
-      "section": "interests",
-      "text": "Which headline would you click first?",
+      "section": "personality",
+      "type": "single",
+      "text": "Which campus vibe fits you best?",
       "options": [
-        { "id": "a", "label": "\"New exoplanet discovered in habitable zone\"", "weights": { "physical_science": 3 } },
-        { "id": "b", "label": "\"Gene therapy cures rare childhood disease\"", "weights": { "life_science": 2.5, "health": 2 } },
-        { "id": "c", "label": "\"Startup reaches $1B valuation in 18 months\"", "weights": { "business": 3 } },
-        { "id": "d", "label": "\"Lost novel by famous author discovered\"", "weights": { "writing": 2.5, "humanities": 1.5 } }
+        {
+          "id": "a",
+          "label": "Intense and ambitious — everyone is grinding toward something big",
+          "strength": 0.85,
+          "prefs": { "setting": "urban" }
+        },
+        {
+          "id": "b",
+          "label": "Collaborative and balanced — strong academics without constant pressure",
+          "strength": 0.65,
+          "prefs": { "setting": "college_town" }
+        },
+        {
+          "id": "c",
+          "label": "Creative and open-ended — room to explore across fields",
+          "strength": 0.6,
+          "prefs": { "setting": "suburban" }
+        },
+        {
+          "id": "d",
+          "label": "Close-knit and residential — I want to know my classmates well",
+          "strength": 0.55,
+          "prefs": { "size": "small", "setting": "college_town" }
+        }
       ]
     },
     {
       "id": "q9",
-      "section": "interests",
-      "text": "How do you feel about writing essays?",
-      "options": [
-        { "id": "a", "label": "I love it — crafting an argument or story is my strength", "weights": { "writing": 3, "humanities": 1.5 } },
-        { "id": "b", "label": "I'm good at it, though I prefer analytical writing over creative", "weights": { "writing": 1.5, "social_science": 1.5, "humanities": 1 } },
-        { "id": "c", "label": "It's fine, but I'd rather show my work with numbers or code", "weights": { "math": 1.5, "computing": 1.5 } },
-        { "id": "d", "label": "I strongly prefer projects and problem sets to essays", "weights": { "engineering": 1.5, "physical_science": 1 } }
-      ]
-    },
-    {
-      "id": "q10",
-      "section": "interests",
-      "text": "Climate change comes up in conversation. What's your angle?",
-      "options": [
-        { "id": "a", "label": "The science — emissions, feedback loops, climate modeling", "weights": { "environment": 3, "physical_science": 1.5 } },
-        { "id": "b", "label": "The technology — renewables, batteries, carbon capture", "weights": { "environment": 2.5, "engineering": 2 } },
-        { "id": "c", "label": "The policy — carbon taxes, treaties, and incentives", "weights": { "environment": 2, "economics": 2 } },
-        { "id": "d", "label": "It matters, but it's not what I want to work on", "weights": {} }
-      ]
-    },
-    {
-      "id": "q11",
-      "section": "interests",
-      "text": "Which museum would you pick on a city trip?",
-      "options": [
-        { "id": "a", "label": "An art museum", "weights": { "arts": 3 } },
-        { "id": "b", "label": "A natural history or science museum", "weights": { "life_science": 1.5, "physical_science": 1.5 } },
-        { "id": "c", "label": "A history or cultural museum", "weights": { "humanities": 2.5, "languages_culture": 1.5 } },
-        { "id": "d", "label": "Skip the museum — I'd rather explore neighborhoods and food", "weights": { "languages_culture": 1.5, "social_science": 1 } }
-      ]
-    },
-    {
-      "id": "q12",
-      "section": "interests",
-      "text": "How interested are you in learning foreign languages?",
-      "options": [
-        { "id": "a", "label": "Very — I actively study one or more languages for fun", "weights": { "languages_culture": 3 } },
-        { "id": "b", "label": "Somewhat — I enjoy it as a window into other cultures", "weights": { "languages_culture": 2, "humanities": 1 } },
-        { "id": "c", "label": "Only as much as school requires", "weights": {} },
-        { "id": "d", "label": "I'm more interested in programming languages", "weights": { "computing": 2 } }
-      ]
-    },
-    {
-      "id": "q13",
-      "section": "interests",
-      "text": "Your friend group is starting a small business. Which role do you claim?",
-      "options": [
-        { "id": "a", "label": "CEO — strategy, pitching, and closing deals", "weights": { "business": 3 } },
-        { "id": "b", "label": "CFO — pricing, margins, and the financial model", "weights": { "business": 2, "economics": 1.5, "math": 1 } },
-        { "id": "c", "label": "CTO — building the product", "weights": { "computing": 2, "engineering": 1.5 } },
-        { "id": "d", "label": "Creative director — brand, design, and storytelling", "weights": { "arts": 2, "writing": 1.5 } }
-      ]
-    },
-    {
-      "id": "q14",
-      "section": "interests",
-      "text": "What kind of problem is most satisfying to solve?",
-      "options": [
-        { "id": "a", "label": "One with a single provably correct answer", "weights": { "math": 2.5, "physical_science": 1.5 } },
-        { "id": "b", "label": "One where I build something people actually use", "weights": { "engineering": 2, "computing": 1.5 } },
-        { "id": "c", "label": "One where I change someone's mind or behavior", "weights": { "social_science": 2, "business": 1.5, "writing": 1 } },
-        { "id": "d", "label": "One with no right answer, where interpretation matters", "weights": { "humanities": 2.5, "arts": 1.5 } }
-      ]
-    },
-    {
-      "id": "q15",
-      "section": "interests",
-      "text": "Which lab or workspace sounds most like home?",
-      "options": [
-        { "id": "a", "label": "A wet lab with pipettes, cultures, and microscopes", "weights": { "life_science": 3, "health": 1 } },
-        { "id": "b", "label": "A machine shop or robotics lab", "weights": { "engineering": 3 } },
-        { "id": "c", "label": "A studio with easels, instruments, or a stage", "weights": { "arts": 3 } },
-        { "id": "d", "label": "A quiet library carrel stacked with books", "weights": { "humanities": 2.5, "writing": 1.5 } }
-      ]
-    },
-    {
-      "id": "q16",
-      "section": "interests",
-      "text": "How do you feel about public speaking and debate?",
-      "options": [
-        { "id": "a", "label": "I thrive on it — persuading a room is a rush", "weights": { "social_science": 1.5, "economics": 1.5, "business": 1.5 } },
-        { "id": "b", "label": "I'm comfortable when I know the material deeply", "weights": { "humanities": 1, "social_science": 1 } },
-        { "id": "c", "label": "I prefer writing my arguments instead", "weights": { "writing": 2 } },
-        { "id": "d", "label": "I'd rather let my work speak for itself", "weights": { "math": 1, "engineering": 1, "computing": 1 } }
-      ]
-    },
-    {
-      "id": "q17",
-      "section": "interests",
-      "text": "Pick the elective you'd take just for fun.",
-      "options": [
-        { "id": "a", "label": "Psychology of decision-making", "weights": { "social_science": 3, "economics": 1 } },
-        { "id": "b", "label": "Astronomy: from black holes to the Big Bang", "weights": { "physical_science": 3 } },
-        { "id": "c", "label": "Creative writing workshop", "weights": { "writing": 3, "arts": 1 } },
-        { "id": "d", "label": "Intro to game development", "weights": { "computing": 2.5, "arts": 1 } }
-      ]
-    },
-    {
-      "id": "q18",
-      "section": "interests",
-      "text": "A documentary about global cultures and migration is on. Do you watch?",
-      "options": [
-        { "id": "a", "label": "Absolutely — how people live around the world fascinates me", "weights": { "languages_culture": 2.5, "social_science": 1.5 } },
-        { "id": "b", "label": "Yes, especially for the history and geopolitics", "weights": { "humanities": 1.5, "economics": 1.5 } },
-        { "id": "c", "label": "Maybe, if friends are watching", "weights": {} },
-        { "id": "d", "label": "I'd switch to something about nature or technology", "weights": { "environment": 1.5, "engineering": 1 } }
-      ]
-    },
-    {
-      "id": "q19",
-      "section": "interests",
-      "text": "Where do you land on working with data?",
-      "options": [
-        { "id": "a", "label": "I love finding patterns in messy datasets", "weights": { "math": 2, "computing": 2 } },
-        { "id": "b", "label": "Useful for answering questions about people and markets", "weights": { "economics": 2, "social_science": 1.5, "business": 1 } },
-        { "id": "c", "label": "I like data in science — measurements, experiments, models", "weights": { "physical_science": 1.5, "life_science": 1.5 } },
-        { "id": "d", "label": "Data leaves me cold; I prefer qualitative depth", "weights": { "humanities": 2, "arts": 1.5 } }
-      ]
-    },
-    {
-      "id": "q20",
-      "section": "interests",
-      "text": "Twenty years from now, which achievement would make you proudest?",
-      "options": [
-        { "id": "a", "label": "A discovery or invention that pushed human knowledge forward", "weights": { "physical_science": 2, "life_science": 1.5, "engineering": 1.5 } },
-        { "id": "b", "label": "A company or product used by millions", "weights": { "business": 2.5, "computing": 1.5 } },
-        { "id": "c", "label": "Art, writing, or performances that moved people", "weights": { "arts": 2.5, "writing": 2 } },
-        { "id": "d", "label": "Policy or advocacy that made society fairer or healthier", "weights": { "economics": 2, "social_science": 1.5, "health": 1.5 } }
-      ]
-    },
-    {
-      "id": "q21",
-      "section": "academics",
-      "text": "Which subject do you consistently earn your best grades in?",
-      "options": [
-        { "id": "a", "label": "Math", "weights": { "math": 2.5, "physical_science": 1, "computing": 1 } },
-        { "id": "b", "label": "Science (biology, chemistry, or physics)", "weights": { "life_science": 1.5, "physical_science": 1.5 } },
-        { "id": "c", "label": "English or history", "weights": { "writing": 1.5, "humanities": 1.5 } },
-        { "id": "d", "label": "It's pretty even across the board", "weights": {} }
-      ]
-    },
-    {
-      "id": "q22",
-      "section": "academics",
-      "text": "What's your unweighted GPA (on a 4.0 scale)?",
-      "options": [
-        { "id": "a", "label": "3.9 – 4.0", "strength": 1.0 },
-        { "id": "b", "label": "3.7 – 3.89", "strength": 0.8 },
-        { "id": "c", "label": "3.4 – 3.69", "strength": 0.55 },
-        { "id": "d", "label": "Below 3.4", "strength": 0.3 }
-      ]
-    },
-    {
-      "id": "q23",
-      "section": "academics",
-      "text": "How many AP, IB, or honors courses will you finish by graduation?",
-      "options": [
-        { "id": "a", "label": "10 or more", "strength": 1.0 },
-        { "id": "b", "label": "6 – 9", "strength": 0.75 },
-        { "id": "c", "label": "3 – 5", "strength": 0.5 },
-        { "id": "d", "label": "0 – 2", "strength": 0.25 }
-      ]
-    },
-    {
-      "id": "q24",
-      "section": "academics",
-      "text": "Which advanced course did you (or would you) most enjoy?",
-      "options": [
-        { "id": "a", "label": "AP Calculus BC or AP Statistics", "weights": { "math": 2.5 } },
-        { "id": "b", "label": "AP Biology or AP Chemistry", "weights": { "life_science": 2, "physical_science": 1.5, "health": 1 } },
-        { "id": "c", "label": "AP Literature or AP World History", "weights": { "writing": 2, "humanities": 2 } },
-        { "id": "d", "label": "AP Computer Science or AP Physics", "weights": { "computing": 2, "physical_science": 1.5, "engineering": 1 } }
-      ]
-    },
-    {
-      "id": "q25",
-      "section": "academics",
-      "text": "How would teachers describe you as a student?",
-      "options": [
-        { "id": "a", "label": "Top of the class — I push for the hardest material available", "strength": 0.95 },
-        { "id": "b", "label": "Strong and consistent, with occasional standout work", "strength": 0.7 },
-        { "id": "c", "label": "Capable, but I focus my effort on subjects I care about", "strength": 0.5 },
-        { "id": "d", "label": "Still finding my academic footing", "strength": 0.3 }
-      ]
-    },
-    {
-      "id": "q26",
-      "section": "academics",
-      "text": "When a class gets genuinely difficult, what do you do?",
-      "options": [
-        { "id": "a", "label": "Grind through it — hard material is why I'm here", "strength": 0.9 },
-        { "id": "b", "label": "Get help early from teachers, tutors, or classmates", "strength": 0.7 },
-        { "id": "c", "label": "Do enough to keep my grade safe", "strength": 0.5 },
-        { "id": "d", "label": "Honestly, I tend to disengage", "strength": 0.25 }
-      ]
-    },
-    {
-      "id": "q27",
-      "section": "academics",
-      "text": "Have you done any independent academic work beyond class?",
-      "options": [
-        { "id": "a", "label": "Yes — research with a lab, professor, or science fair project", "strength": 0.95, "weights": { "life_science": 0.5, "physical_science": 0.5 } },
-        { "id": "b", "label": "Yes — self-taught skills like coding, a language, or an instrument", "strength": 0.75 },
-        { "id": "c", "label": "Some — summer programs or online courses", "strength": 0.6 },
-        { "id": "d", "label": "Not yet", "strength": 0.4 }
-      ]
-    },
-    {
-      "id": "q28",
-      "section": "academics",
-      "text": "Which describes your ideal college workload?",
-      "options": [
-        { "id": "a", "label": "Deep and technical — problem sets, labs, and rigor", "weights": { "engineering": 1.5, "math": 1.5, "physical_science": 1 } },
-        { "id": "b", "label": "Reading- and discussion-heavy seminars", "weights": { "humanities": 1.5, "social_science": 1.5, "writing": 1 } },
-        { "id": "c", "label": "Project- and portfolio-based creation", "weights": { "arts": 1.5, "computing": 1, "engineering": 1 } },
-        { "id": "d", "label": "A balanced mix of everything", "weights": {} }
-      ]
-    },
-    {
-      "id": "q29",
-      "section": "testing",
-      "text": "What's your SAT score (or converted ACT)?",
-      "options": [
-        { "id": "a", "label": "1500 – 1600 (ACT 34 – 36)", "strength": 1.0 },
-        { "id": "b", "label": "1400 – 1490 (ACT 31 – 33)", "strength": 0.8 },
-        { "id": "c", "label": "1300 – 1390 (ACT 28 – 30)", "strength": 0.55 },
-        { "id": "d", "label": "Below 1300 / haven't taken it yet", "strength": 0.35 }
-      ]
-    },
-    {
-      "id": "q30",
-      "section": "testing",
-      "text": "Which SAT section is stronger for you?",
-      "options": [
-        { "id": "a", "label": "Math, by a clear margin", "weights": { "math": 2, "engineering": 1, "computing": 1 } },
-        { "id": "b", "label": "Reading and writing, by a clear margin", "weights": { "writing": 2, "humanities": 1.5 } },
-        { "id": "c", "label": "They're about even", "weights": {} },
-        { "id": "d", "label": "Haven't taken it yet", "weights": {} }
-      ]
-    },
-    {
-      "id": "q31",
-      "section": "testing",
-      "text": "How do you perform on high-stakes tests in general?",
-      "options": [
-        { "id": "a", "label": "I usually outperform my practice scores", "strength": 0.9 },
-        { "id": "b", "label": "I perform right around my preparation level", "strength": 0.7 },
-        { "id": "c", "label": "Nerves sometimes cost me points", "strength": 0.5 },
-        { "id": "d", "label": "Tests really don't reflect my ability", "strength": 0.4 }
-      ]
-    },
-    {
-      "id": "q32",
-      "section": "extracurriculars",
-      "text": "Which extracurricular takes up most of your time?",
-      "options": [
-        { "id": "a", "label": "STEM clubs — robotics, math team, coding, science olympiad", "weights": { "engineering": 2, "computing": 1.5, "math": 1.5 } },
-        { "id": "b", "label": "Arts — band, theater, choir, studio art, film", "weights": { "arts": 2.5 } },
-        { "id": "c", "label": "Leadership and service — student government, volunteering, debate", "weights": { "social_science": 1.5, "economics": 1, "business": 1 } },
-        { "id": "d", "label": "Publications — newspaper, yearbook, literary magazine", "weights": { "writing": 2.5 } }
-      ]
-    },
-    {
-      "id": "q33",
-      "section": "extracurriculars",
-      "text": "How deep does your main activity go?",
-      "options": [
-        { "id": "a", "label": "State/national level recognition or a leadership title I earned", "strength": 0.95 },
-        { "id": "b", "label": "Multiple years of committed involvement", "strength": 0.75 },
-        { "id": "c", "label": "Regular participation, nothing formal", "strength": 0.55 },
-        { "id": "d", "label": "I spread my time across many casual activities", "strength": 0.45 }
-      ]
-    },
-    {
-      "id": "q34",
-      "section": "extracurriculars",
-      "text": "Have you ever volunteered in a hospital, clinic, or care setting?",
-      "options": [
-        { "id": "a", "label": "Yes, extensively — it confirmed my interest in healthcare", "weights": { "health": 3, "life_science": 1 } },
-        { "id": "b", "label": "A little, and I'd like to do more", "weights": { "health": 1.5 } },
-        { "id": "c", "label": "No, but I volunteer in other community settings", "weights": { "social_science": 1.5 } },
-        { "id": "d", "label": "No, that's not my scene", "weights": {} }
-      ]
-    },
-    {
-      "id": "q35",
-      "section": "extracurriculars",
-      "text": "Have you ever made money from your own venture (tutoring, resale, an app, art commissions)?",
-      "options": [
-        { "id": "a", "label": "Yes — I've run something real with actual customers", "weights": { "business": 2.5 }, "strength": 0.8 },
-        { "id": "b", "label": "Small experiments here and there", "weights": { "business": 1.5 } },
-        { "id": "c", "label": "No, but I'd love to try", "weights": { "business": 1 } },
-        { "id": "d", "label": "No, entrepreneurship doesn't interest me", "weights": {} }
-      ]
-    },
-    {
-      "id": "q36",
-      "section": "extracurriculars",
-      "text": "Outside school, what do you create or maintain?",
-      "options": [
-        { "id": "a", "label": "Code — personal projects, games, or open source", "weights": { "computing": 2.5 } },
-        { "id": "b", "label": "Creative work — music, art, videos, or stories", "weights": { "arts": 2, "writing": 1.5 } },
-        { "id": "c", "label": "A garden, animals, collections, or nature projects", "weights": { "environment": 2, "life_science": 1.5 } },
-        { "id": "d", "label": "Mostly my grades and my friendships", "weights": {} }
-      ]
-    },
-    {
-      "id": "q37",
-      "section": "preferences",
+      "section": "other",
+      "type": "single",
       "text": "What campus size feels right?",
       "options": [
         { "id": "a", "label": "Small and tight-knit (under 5,000 undergrads)", "prefs": { "size": "small" } },
         { "id": "b", "label": "Mid-sized (5,000 – 15,000)", "prefs": { "size": "medium" } },
         { "id": "c", "label": "Big and buzzing (15,000+)", "prefs": { "size": "large" } },
-        { "id": "d", "label": "Size doesn't matter to me", "prefs": {} }
+        { "id": "d", "label": "Size doesn't matter much to me", "prefs": {} }
       ]
     },
     {
-      "id": "q38",
-      "section": "preferences",
-      "text": "Where do you want to spend the next four years?",
-      "options": [
-        { "id": "a", "label": "The heart of a big city", "prefs": { "setting": "urban" } },
-        { "id": "b", "label": "A classic college town", "prefs": { "setting": "college_town" } },
-        { "id": "c", "label": "A leafy suburban campus", "prefs": { "setting": "suburban" } },
-        { "id": "d", "label": "No strong preference", "prefs": { "setting": "no_preference" } }
-      ]
-    },
-    {
-      "id": "q39",
-      "section": "preferences",
-      "text": "How do you feel about applying to ultra-selective schools?",
-      "options": [
-        { "id": "a", "label": "Bring it on — I want the most selective program I can reach", "strength": 0.85 },
-        { "id": "b", "label": "I'll apply to some reaches alongside realistic options", "strength": 0.65 },
-        { "id": "c", "label": "I'd rather target schools where I'm clearly competitive", "strength": 0.5 },
-        { "id": "d", "label": "Selectivity doesn't factor into my choices", "strength": 0.55 }
-      ]
-    },
-    {
-      "id": "q40",
-      "section": "preferences",
+      "id": "q10",
+      "section": "other",
+      "type": "single",
       "text": "Which matters most in your ideal program?",
       "options": [
-        { "id": "a", "label": "Flexibility to combine fields and design my own path", "weights": { "humanities": 1, "social_science": 1, "computing": 0.5 } },
-        { "id": "b", "label": "Depth — world-class training in one discipline", "weights": { "math": 1, "physical_science": 1, "engineering": 0.5 } },
-        { "id": "c", "label": "Career outcomes and professional networks", "weights": { "business": 1.5, "economics": 1 } },
-        { "id": "d", "label": "Hands-on making, performing, or research from day one", "weights": { "arts": 1, "engineering": 1, "life_science": 0.5 } }
+        {
+          "id": "a",
+          "label": "Flexibility to combine fields and design my own path",
+          "weights": { "humanities": 1, "social_science": 1, "computing": 0.5 }
+        },
+        {
+          "id": "b",
+          "label": "Depth — world-class training in one discipline",
+          "weights": { "math": 1, "physical_science": 1, "engineering": 0.5 }
+        },
+        {
+          "id": "c",
+          "label": "Career outcomes and professional networks",
+          "weights": { "business": 1.5, "economics": 1 }
+        },
+        {
+          "id": "d",
+          "label": "Hands-on making, performing, or research from day one",
+          "weights": { "arts": 1, "engineering": 1, "life_science": 0.5 }
+        }
       ]
     }
   ]
