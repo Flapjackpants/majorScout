@@ -87,7 +87,7 @@ export default function CategoryHub({ sections, counts, onStartCategory, onStart
           <p className="text-xs font-bold uppercase tracking-widest text-sky-300">Your assessment</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Choose a category to begin</h1>
           <p className="mx-auto mt-3 max-w-xl text-slate-400">
-            Ten questions across four areas. Start anywhere — we combine everything into one match profile.
+            Forty questions across four clearly labeled areas. Start anywhere — we combine everything into one match profile.
           </p>
           <button
             onClick={onStartAll}
@@ -112,6 +112,11 @@ export default function CategoryHub({ sections, counts, onStartCategory, onStart
                   <CategoryIcon name={section.icon} />
                 </div>
                 <h2 className="text-lg font-bold text-white">{section.title}</h2>
+                {section.questionRange && (
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Questions {section.questionRange}
+                  </p>
+                )}
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-400">{section.blurb}</p>
                 <div className="mt-5 flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2 text-slate-400">

@@ -276,6 +276,7 @@ export default function Quiz({
           <div className="mb-6">
             <span className="rounded-full bg-violet-500/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-violet-300">
               {section.title}
+              {section.questionRange ? ` · Q${section.questionRange}` : ''}
             </span>
             <p className="mt-2 text-sm text-slate-500">{section.blurb}</p>
           </div>
@@ -283,6 +284,7 @@ export default function Quiz({
         {!isFirstOfSection && section && (
           <div className="mb-6 text-xs font-bold uppercase tracking-widest text-slate-600">
             {section.title}
+            {section.questionRange ? ` · Q${section.questionRange}` : ''}
           </div>
         )}
 

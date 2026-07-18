@@ -15,7 +15,7 @@ function StatCard({ value, label }) {
 const STEPS = [
   {
     title: 'Pick your categories',
-    body: 'Ten questions across extracurriculars & stats, interests, personality, and preferences — about 4 minutes.',
+    body: '40 questions across extracurriculars & stats, interests, personality, and preferences — about 8 minutes.',
   },
   {
     title: 'We crunch the data',
@@ -135,7 +135,7 @@ export default function Landing({ onStart, user, onRefreshUser }) {
             Find my major
           </button>
           <p className="mt-3 text-sm text-slate-500">
-            Free core quiz · ~4 minutes · Sign in to save · Premium for full results
+            Free core quiz · ~8 minutes · Sign in to save · Premium for full results
           </p>
         </div>
 
