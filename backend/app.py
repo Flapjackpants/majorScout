@@ -9,8 +9,9 @@ from functools import wraps
 
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, request, session
+from flask import Flask, jsonify, redirect, request, send_from_directory, session
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 import stripe
 
 from ai import generate_essay_guidance, generate_followup_questions
@@ -21,13 +22,18 @@ from matching import Matcher, build_student_profile
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+FRONTEND_DIST = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=FRONTEND_URL.startswith("https://"),
     PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,
 )
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 ADMIN_EMAILS = {
     e.strip().lower()
     for e in os.environ.get("ADMIN_EMAILS", "").split(",")
@@ -564,5 +570,21 @@ def premium_essay(user):
     return jsonify({"guidance": guidance})
 
 
+@app.get("/", defaults={"path": ""})
+@app.get("/<path:path>")
+def serve_spa(path: str):
+    """Serve the Vite build when present (Railway/Docker). Dev still uses Vite."""
+    if path.startswith("api/"):
+        return jsonify({"error": "Not found"}), 404
+    if path and os.path.isfile(os.path.join(FRONTEND_DIST, path)):
+        return send_from_directory(FRONTEND_DIST, path)
+    index = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.isfile(index):
+        return send_from_directory(FRONTEND_DIST, "index.html")
+    return jsonify({"error": "Frontend is not built."}), 404
+
+
 if __name__ == "__main__":
-    app.run(port=5001, debug=True)
+    port = int(os.environ.get("PORT", "5001"))
+    app.run(host="0.0.0.0", port=port, debug=True)
+
