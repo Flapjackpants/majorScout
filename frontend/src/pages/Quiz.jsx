@@ -50,7 +50,7 @@ export default function Quiz({
 
   const section = question
     ? question.section === 'premium'
-      ? { title: 'Premium follow-up', blurb: 'Tailored from your answers so far.' }
+      ? { title: 'Follow-up', blurb: 'Tailored from your answers so far.' }
       : sectionsById[question.section]
     : null
   const isFirstOfSection =
@@ -86,7 +86,7 @@ export default function Quiz({
       const data = await res.json()
       onComplete({
         results: data.results,
-        isPremium: data.is_premium,
+        unlocked: data.unlocked,
         answers: finalAnswers,
         attemptId: data.attempt_id,
         profileSummary: data.profile_summary,
@@ -98,7 +98,8 @@ export default function Quiz({
   }
 
   async function maybeLoadFollowup(currentAnswers) {
-    if (!includePremiumFollowup || !user?.is_premium) {
+    // AI follow-ups require a signed-in account (not a paid unlock).
+    if (!includePremiumFollowup || !user) {
       await submit(currentAnswers)
       return
     }

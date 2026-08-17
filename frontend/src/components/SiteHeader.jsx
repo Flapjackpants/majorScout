@@ -1,6 +1,13 @@
 import { logout, startGoogleLogin } from '../api.js'
 
-export default function SiteHeader({ user, onHome, rightSlot, onRefreshUser }) {
+export default function SiteHeader({
+  user,
+  onHome,
+  rightSlot,
+  onRefreshUser,
+  onMyResults,
+  unlockedBadge,
+}) {
   return (
     <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
       <button onClick={onHome} className="flex items-center gap-2 text-lg font-bold tracking-tight">
@@ -13,10 +20,18 @@ export default function SiteHeader({ user, onHome, rightSlot, onRefreshUser }) {
         {rightSlot}
         {user ? (
           <div className="flex items-center gap-3">
-            {user.is_premium && (
+            {unlockedBadge && (
               <span className="hidden rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300 sm:inline">
-                Premium
+                Unlocked
               </span>
+            )}
+            {onMyResults && (
+              <button
+                onClick={onMyResults}
+                className="hidden rounded-full border border-white/15 px-4 py-1.5 text-sm font-semibold text-slate-300 transition hover:border-sky-400/50 hover:text-white sm:inline"
+              >
+                My results
+              </button>
             )}
             {user.picture ? (
               <img src={user.picture} alt="" className="h-8 w-8 rounded-full border border-white/10" />

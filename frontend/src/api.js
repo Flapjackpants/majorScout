@@ -27,16 +27,33 @@ export async function logout() {
   await api('/api/auth/logout', { method: 'POST', body: '{}' })
 }
 
-export async function startCheckout() {
-  const res = await api('/api/billing/checkout', { method: 'POST', body: '{}' })
+export async function startCheckout(attemptId) {
+  if (!attemptId) throw new Error('Save your quiz results first, then unlock.')
+  const res = await api('/api/billing/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ attempt_id: attemptId }),
+  })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || 'Checkout failed')
   window.location.href = data.url
 }
 
-export async function openBillingPortal() {
-  const res = await api('/api/billing/portal', { method: 'POST', body: '{}' })
+export async function fetchAttempts() {
+  const res = await api('/api/quiz/attempts')
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Portal failed')
-  window.location.href = data.url
+  if (!res.ok) throw new Error(data.error || 'Could not load attempts')
+  return data.attempts || []
+}
+
+export async function fetchAttempt(attemptId) {
+  const res = await api(`/api/quiz/attempts/${attemptId}`)
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Could not load attempt')
+  return {
+    results: data.results,
+    unlocked: data.unlocked,
+    answers: data.answers,
+    attemptId: data.attempt_id,
+    profileSummary: data.profile_summary,
+  }
 }

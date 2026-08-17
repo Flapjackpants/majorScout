@@ -59,18 +59,18 @@ function LockedCard({ rank, matchPercent, onUnlock, featured }) {
       <div className="pointer-events-none absolute inset-0 backdrop-blur-[2px]" />
       <div className="relative">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-300">
-          {rank === 1 ? 'Best match — Premium' : `Match #${rank} — Premium`}
+          {rank === 1 ? 'Best match — Locked' : `Match #${rank} — Locked`}
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-slate-500">#{rank}</div>
             <h3 className={`mt-1 font-bold text-slate-400 ${featured ? 'text-2xl' : 'text-lg'}`}>
-              Hidden until you upgrade
+              Hidden until you unlock
             </h3>
             <p className="mt-2 text-sm text-slate-500">
               {rank === 1
-                ? 'Your strongest overall fit is locked behind Premium.'
-                : 'Deeper fits beyond the free top mid-range are Premium.'}
+                ? 'Your strongest overall fit unlocks with a one-time purchase for this result set.'
+                : 'Deeper fits beyond the free mid-range unlock with this result set.'}
             </p>
           </div>
           <MatchRing percent={matchPercent} size={featured ? 'lg' : 'md'} />
@@ -79,14 +79,14 @@ function LockedCard({ rank, matchPercent, onUnlock, featured }) {
           onClick={onUnlock}
           className="mt-5 rounded-full bg-gradient-to-r from-amber-500 to-violet-500 px-6 py-2.5 text-sm font-bold text-white"
         >
-          Unlock with Premium
+          Unlock this result set
         </button>
       </div>
     </div>
   )
 }
 
-function ProgramCard({ program, rank, featured, guidance, isPremium, onUnlock }) {
+function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) {
   if (program.locked) {
     return (
       <LockedCard
@@ -157,7 +157,7 @@ function ProgramCard({ program, rank, featured, guidance, isPremium, onUnlock })
         </div>
       )}
 
-      {isPremium && schoolGuidance && (
+      {unlocked && schoolGuidance && (
         <details className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/5 p-4">
           <summary className="cursor-pointer text-xs font-bold uppercase tracking-widest text-amber-300">
             Essay approach for {program.university}
@@ -195,34 +195,34 @@ function ProgramCard({ program, rank, featured, guidance, isPremium, onUnlock })
         </details>
       )}
 
-      {!isPremium && featured === false && rank <= 8 && (
+      {!unlocked && featured === false && rank <= 8 && (
         <button
           onClick={onUnlock}
           className="mt-4 text-xs font-semibold text-amber-300/80 underline-offset-2 hover:underline"
         >
-          Premium: unlock essay approaches for this school
+          Unlock essay approaches for this school
         </button>
       )}
     </div>
   )
 }
 
-export default function Results({ payload, user, onRetake, onHome, onRefreshUser }) {
+export default function Results({ payload, user, onRetake, onHome, onMyResults }) {
   const results = payload?.results || []
-  const answers = payload?.answers || {}
-  const isPremium = Boolean(user?.is_premium || payload?.isPremium)
+  const attemptId = payload?.attemptId
+  const unlocked = Boolean(payload?.unlocked || user?.is_admin)
 
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [guidance, setGuidance] = useState(null)
   const [loadingGuidance, setLoadingGuidance] = useState(false)
 
   useEffect(() => {
-    if (!isPremium || !results.length) return
+    if (!unlocked || !attemptId || !user) return
     let cancelled = false
     setLoadingGuidance(true)
     api('/api/premium/essay-guidance', {
       method: 'POST',
-      body: JSON.stringify({ answers, results }),
+      body: JSON.stringify({ attempt_id: attemptId }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
@@ -234,7 +234,7 @@ export default function Results({ payload, user, onRetake, onHome, onRefreshUser
     return () => {
       cancelled = true
     }
-  }, [isPremium])
+  }, [unlocked, attemptId, user?.id])
 
   if (!results.length) {
     return (
@@ -261,7 +261,8 @@ export default function Results({ payload, user, onRetake, onHome, onRefreshUser
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
         user={user}
-        feature="Unlock your #1 match, deeper rankings, AI follow-ups, and essay approaches."
+        attemptId={attemptId}
+        feature="One-time unlock for this quiz: your #1 match, deeper rankings (#9+), and essay approaches."
       />
 
       <header className="flex items-center justify-between">
@@ -272,9 +273,22 @@ export default function Results({ payload, user, onRetake, onHome, onRefreshUser
           MajorScout
         </button>
         <div className="flex items-center gap-2">
+          {unlocked && (
+            <span className="hidden rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300 sm:inline">
+              Unlocked
+            </span>
+          )}
+          {user && onMyResults && (
+            <button
+              onClick={onMyResults}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200"
+            >
+              My results
+            </button>
+          )}
           {!user && (
             <button
-              onClick={() => {
+              onClick={async () => {
                 try {
                   sessionStorage.setItem('pendingQuiz', JSON.stringify(payload))
                 } catch {
@@ -299,11 +313,12 @@ export default function Results({ payload, user, onRetake, onHome, onRefreshUser
       <div className="animate-fade-up mt-12 text-center">
         <p className="text-xs font-bold uppercase tracking-widest text-sky-300">Your results</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-          {isPremium ? 'Your full program matches' : 'Your free program matches'}
+          {unlocked ? 'Your full program matches' : 'Your free program matches'}
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-slate-400">
           Ranked from nearly 2,000 programs using your interests, academics, and preferences.
-          {!isPremium && ' Free results show ranks #2–#8; upgrade to see #1, #9+, and essay guides.'}
+          {!unlocked &&
+            ' Free results show ranks #2–#8. Sign in and unlock this result set for #1, #9+, and essay guides.'}
         </p>
         {loadingGuidance && (
           <p className="mt-2 text-sm text-amber-300/80">Writing essay approaches for your schools…</p>
@@ -316,7 +331,7 @@ export default function Results({ payload, user, onRetake, onHome, onRefreshUser
           rank={top.rank}
           featured
           guidance={guidance}
-          isPremium={isPremium}
+          unlocked={unlocked}
           onUnlock={() => setUpgradeOpen(true)}
         />
       </div>
@@ -328,7 +343,7 @@ export default function Results({ payload, user, onRetake, onHome, onRefreshUser
             program={program}
             rank={program.rank}
             guidance={guidance}
-            isPremium={isPremium}
+            unlocked={unlocked}
             onUnlock={() => setUpgradeOpen(true)}
           />
         ))}
@@ -344,7 +359,7 @@ export default function Results({ payload, user, onRetake, onHome, onRefreshUser
                 program={program}
                 rank={program.rank}
                 guidance={guidance}
-                isPremium={isPremium}
+                unlocked={unlocked}
                 onUnlock={() => setUpgradeOpen(true)}
               />
             ))}

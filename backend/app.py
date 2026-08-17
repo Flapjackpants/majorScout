@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from functools import wraps
 
 from authlib.integrations.flask_client import OAuth
@@ -90,17 +91,10 @@ def login_required(fn):
     return wrapper
 
 
-def premium_required(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        user = current_user()
-        if user is None:
-            return jsonify({"error": "Authentication required."}), 401
-        if not user.is_premium:
-            return jsonify({"error": "Premium subscription required.", "upgrade": True}), 403
-        return fn(user, *args, **kwargs)
-
-    return wrapper
+def attempt_access_unlocked(user: User, attempt: QuizAttempt) -> bool:
+    if user.is_admin:
+        return True
+    return bool(attempt.unlocked)
 
 
 def public_question(q: dict) -> dict:
@@ -121,12 +115,12 @@ def public_question(q: dict) -> dict:
     return out
 
 
-def gate_results(results: list, is_premium: bool) -> list:
-    """Free users see ranks #2–#8; #1 and #9+ are locked."""
+def gate_results(results: list, unlocked: bool) -> list:
+    """Locked attempts see ranks #2–#8; #1 and #9+ are locked until paid unlock."""
     gated = []
     for i, program in enumerate(results):
         rank = i + 1
-        locked = (not is_premium) and (rank == 1 or rank >= 9)
+        locked = (not unlocked) and (rank == 1 or rank >= 9)
         if locked:
             gated.append(
                 {
@@ -148,14 +142,47 @@ def gate_results(results: list, is_premium: bool) -> list:
     return gated
 
 
-def persist_attempt(user: User | None, answers: dict, profile: dict, results: list):
+def attempt_summary(attempt: QuizAttempt, unlocked: bool) -> dict:
+    raw = attempt.results or []
+    summary = {
+        "id": attempt.id,
+        "created_at": attempt.created_at.isoformat() if attempt.created_at else None,
+        "unlocked": unlocked,
+        "top_university": None,
+        "top_major": None,
+        "match_percent": None,
+    }
+    if unlocked and raw:
+        top = raw[0]
+        summary["top_university"] = top.get("university")
+        summary["top_major"] = top.get("major")
+        summary["match_percent"] = top.get("match_percent")
+    elif raw:
+        # Free mid-range peek for list cards
+        mid = raw[1] if len(raw) > 1 else None
+        if mid:
+            summary["top_university"] = mid.get("university")
+            summary["top_major"] = mid.get("major")
+            summary["match_percent"] = mid.get("match_percent")
+    return summary
+
+
+def persist_attempt(
+    user: User | None,
+    answers: dict,
+    profile: dict,
+    results: list,
+    *,
+    unlocked: bool = False,
+):
     if user is None:
         return None
     db = get_session()
     try:
-        # Re-fetch attached to this session
         u = db.get(User, user.id)
-        attempt = QuizAttempt(user_id=u.id)
+        attempt = QuizAttempt(user_id=u.id, unlocked=unlocked)
+        if unlocked:
+            attempt.unlocked_at = datetime.now(timezone.utc)
         attempt.answers = answers
         attempt.profile = profile
         attempt.results = results
@@ -165,6 +192,25 @@ def persist_attempt(user: User | None, answers: dict, profile: dict, results: li
         return attempt.id
     finally:
         db.close()
+
+
+def serialize_attempt_payload(user: User, attempt: QuizAttempt) -> dict:
+    unlocked = attempt_access_unlocked(user, attempt)
+    raw = attempt.results or []
+    return {
+        "attempt_id": attempt.id,
+        "unlocked": unlocked,
+        "results": gate_results(raw, unlocked),
+        "answers": attempt.answers,
+        "profile_summary": {
+            "strength": (attempt.profile or {}).get("strength"),
+            "top_interests": sorted(
+                ((attempt.profile or {}).get("interest") or {}).items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )[:5],
+        },
+    }
 
 
 @app.get("/api/stats")
@@ -202,15 +248,16 @@ def match():
         return jsonify({"error": "Not enough interest answers to build a match."}), 400
 
     user = current_user()
-    is_premium = bool(user and user.is_premium)
+    # New attempts start locked; admins see full results immediately.
+    unlocked = bool(user and user.is_admin)
     raw = MATCHER.match(profile, top_n=15)
-    results = gate_results(raw, is_premium)
-    attempt_id = persist_attempt(user, answers, profile, raw)
+    results = gate_results(raw, unlocked)
+    attempt_id = persist_attempt(user, answers, profile, raw, unlocked=unlocked)
 
     return jsonify(
         {
             "results": results,
-            "is_premium": is_premium,
+            "unlocked": unlocked,
             "attempt_id": attempt_id,
             "profile_summary": {
                 "strength": profile["strength"],
@@ -293,14 +340,65 @@ def auth_logout():
 @app.post("/api/quiz/save")
 @login_required
 def quiz_save(user):
+    """Persist a quiz from answers; always recompute ungated results server-side."""
     payload = request.get_json(silent=True) or {}
     answers = payload.get("answers")
     if not isinstance(answers, dict):
         return jsonify({"error": "answers required"}), 400
     profile = build_student_profile(answers, QUESTIONS_BY_ID)
-    results = payload.get("results")
-    attempt_id = persist_attempt(user, answers, profile, results if isinstance(results, list) else [])
-    return jsonify({"attempt_id": attempt_id})
+    if not profile["interest"]:
+        return jsonify({"error": "Not enough interest answers to build a match."}), 400
+    raw = MATCHER.match(profile, top_n=15)
+    unlocked = bool(user.is_admin)
+    attempt_id = persist_attempt(user, answers, profile, raw, unlocked=unlocked)
+    return jsonify(
+        {
+            "attempt_id": attempt_id,
+            "unlocked": unlocked,
+            "results": gate_results(raw, unlocked),
+            "profile_summary": {
+                "strength": profile["strength"],
+                "top_interests": sorted(
+                    profile["interest"].items(), key=lambda x: x[1], reverse=True
+                )[:5],
+            },
+        }
+    )
+
+
+@app.get("/api/quiz/attempts")
+@login_required
+def quiz_attempts_list(user):
+    db = get_session()
+    try:
+        rows = (
+            db.query(QuizAttempt)
+            .filter_by(user_id=user.id)
+            .order_by(QuizAttempt.created_at.desc())
+            .all()
+        )
+        return jsonify(
+            {
+                "attempts": [
+                    attempt_summary(a, attempt_access_unlocked(user, a)) for a in rows
+                ]
+            }
+        )
+    finally:
+        db.close()
+
+
+@app.get("/api/quiz/attempts/<int:attempt_id>")
+@login_required
+def quiz_attempt_detail(user, attempt_id: int):
+    db = get_session()
+    try:
+        attempt = db.get(QuizAttempt, attempt_id)
+        if attempt is None or attempt.user_id != user.id:
+            return jsonify({"error": "Attempt not found."}), 404
+        return jsonify(serialize_attempt_payload(user, attempt))
+    finally:
+        db.close()
 
 
 # ── Billing ──────────────────────────────────────────────────────────────────
@@ -312,25 +410,37 @@ def billing_checkout(user):
     if not stripe.api_key or not STRIPE_PRICE_ID:
         return jsonify({"error": "Stripe is not configured."}), 503
 
+    payload = request.get_json(silent=True) or {}
+    attempt_id = payload.get("attempt_id")
+    if not attempt_id:
+        return jsonify({"error": "attempt_id is required to unlock results."}), 400
+
     db = get_session()
     try:
         u = db.get(User, user.id)
+        attempt = db.get(QuizAttempt, int(attempt_id))
+        if attempt is None or attempt.user_id != u.id:
+            return jsonify({"error": "Attempt not found."}), 404
+        if attempt.unlocked or u.is_admin:
+            return jsonify({"error": "This attempt is already unlocked."}), 400
+
         if not u.stripe_customer_id:
             customer = stripe.Customer.create(email=u.email, name=u.name or u.email)
             u.stripe_customer_id = customer["id"]
             db.commit()
         customer_id = u.stripe_customer_id
+        aid = attempt.id
     finally:
         db.close()
 
     checkout = stripe.checkout.Session.create(
-        mode="subscription",
+        mode="payment",
         customer=customer_id,
         line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
-        success_url=f"{FRONTEND_URL}/?billing=success",
-        cancel_url=f"{FRONTEND_URL}/?billing=cancel",
+        success_url=f"{FRONTEND_URL}/?billing=success&attempt_id={aid}",
+        cancel_url=f"{FRONTEND_URL}/?billing=cancel&attempt_id={aid}",
         client_reference_id=str(user.id),
-        metadata={"user_id": str(user.id)},
+        metadata={"user_id": str(user.id), "attempt_id": str(aid)},
     )
     return jsonify({"url": checkout.url})
 
@@ -338,15 +448,7 @@ def billing_checkout(user):
 @app.post("/api/billing/portal")
 @login_required
 def billing_portal(user):
-    if not stripe.api_key:
-        return jsonify({"error": "Stripe is not configured."}), 503
-    if not user.stripe_customer_id:
-        return jsonify({"error": "No billing customer on file."}), 400
-    portal = stripe.billing_portal.Session.create(
-        customer=user.stripe_customer_id,
-        return_url=FRONTEND_URL,
-    )
-    return jsonify({"url": portal.url})
+    return jsonify({"error": "Billing portal is not available for one-time unlocks."}), 410
 
 
 @app.post("/api/billing/webhook")
@@ -364,32 +466,32 @@ def billing_webhook():
     etype = event["type"]
     data = event["data"]["object"]
 
+    if etype != "checkout.session.completed":
+        return jsonify({"ok": True})
+
     db = get_session()
     try:
-        if etype == "checkout.session.completed":
-            user_id = (data.get("metadata") or {}).get("user_id") or data.get(
-                "client_reference_id"
-            )
-            customer_id = data.get("customer")
-            if user_id:
-                u = db.get(User, int(user_id))
-                if u:
-                    if customer_id:
+        meta = data.get("metadata") or {}
+        attempt_id = meta.get("attempt_id")
+        user_id = meta.get("user_id") or data.get("client_reference_id")
+        customer_id = data.get("customer")
+        session_id = data.get("id")
+
+        if attempt_id:
+            attempt = db.get(QuizAttempt, int(attempt_id))
+            if attempt and (not user_id or attempt.user_id == int(user_id)):
+                attempt.unlocked = True
+                attempt.unlocked_at = datetime.now(timezone.utc)
+                attempt.stripe_checkout_session_id = session_id
+                if customer_id:
+                    u = db.get(User, attempt.user_id)
+                    if u and not u.stripe_customer_id:
                         u.stripe_customer_id = customer_id
-                    u.subscription_status = "active"
-                    db.commit()
-        elif etype in {
-            "customer.subscription.updated",
-            "customer.subscription.deleted",
-            "customer.subscription.created",
-        }:
-            customer_id = data.get("customer")
-            status = data.get("status")
-            if etype == "customer.subscription.deleted":
-                status = "canceled"
-            u = db.query(User).filter_by(stripe_customer_id=customer_id).one_or_none()
+                db.commit()
+        elif user_id and customer_id:
+            u = db.get(User, int(user_id))
             if u:
-                u.subscription_status = status
+                u.stripe_customer_id = customer_id
                 db.commit()
     finally:
         db.close()
@@ -397,17 +499,17 @@ def billing_webhook():
     return jsonify({"ok": True})
 
 
-# ── Premium AI ───────────────────────────────────────────────────────────────
+# ── Account AI ───────────────────────────────────────────────────────────────
 
 
 @app.post("/api/premium/followup")
-@premium_required
+@login_required
 def premium_followup(user):
+    """AI follow-ups require a signed-in account (not a paid unlock)."""
     payload = request.get_json(silent=True) or {}
     answers = payload.get("answers") or {}
     profile = build_student_profile(answers, QUESTIONS_BY_ID)
     questions_payload = generate_followup_questions(profile, answers)
-    # Normalize for the client
     mcq = []
     for q in questions_payload.get("mcq") or []:
         mcq.append(
@@ -436,17 +538,29 @@ def premium_followup(user):
 
 
 @app.post("/api/premium/essay-guidance")
-@premium_required
+@login_required
 def premium_essay(user):
     payload = request.get_json(silent=True) or {}
-    answers = payload.get("answers") or {}
-    results = payload.get("results") or []
-    # Prefer unlocked full results if client only sent gated ones
-    profile = build_student_profile(answers, QUESTIONS_BY_ID)
-    unlocked = [r for r in results if not r.get("locked")]
-    if len(unlocked) < 3:
-        unlocked = MATCHER.match(profile, top_n=15)
-    guidance = generate_essay_guidance(profile, unlocked)
+    attempt_id = payload.get("attempt_id")
+    if not attempt_id:
+        return jsonify({"error": "attempt_id is required."}), 400
+
+    db = get_session()
+    try:
+        attempt = db.get(QuizAttempt, int(attempt_id))
+        if attempt is None or attempt.user_id != user.id:
+            return jsonify({"error": "Attempt not found."}), 404
+        if not attempt_access_unlocked(user, attempt):
+            return jsonify({"error": "Unlock this result set to view essay guidance.", "upgrade": True}), 403
+        answers = attempt.answers
+        profile = attempt.profile or build_student_profile(answers, QUESTIONS_BY_ID)
+        unlocked_results = attempt.results or []
+    finally:
+        db.close()
+
+    if len(unlocked_results) < 3:
+        unlocked_results = MATCHER.match(profile, top_n=15)
+    guidance = generate_essay_guidance(profile, unlocked_results)
     return jsonify({"guidance": guidance})
 
 

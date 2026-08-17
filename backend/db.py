@@ -1,4 +1,4 @@
-"""SQLite models and session helpers for MajorScout."""
+"""Turso (libSQL) models and session helpers for MajorScout."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import os
 from datetime import datetime, timezone
 
+from dotenv import load_dotenv
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -17,8 +18,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "majorscout.db")
-DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "").strip()
+TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
 
 
 class Base(DeclarativeBase):
@@ -35,18 +38,13 @@ class User(Base):
     picture: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Legacy column retained for existing Turso schemas; no longer used for access.
     subscription_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
 
     attempts: Mapped[list[QuizAttempt]] = relationship(back_populates="user")
-
-    @property
-    def is_premium(self) -> bool:
-        if self.is_admin:
-            return True
-        return self.subscription_status in {"active", "trialing"}
 
     def to_public(self) -> dict:
         return {
@@ -55,8 +53,6 @@ class User(Base):
             "name": self.name,
             "picture": self.picture,
             "is_admin": self.is_admin,
-            "is_premium": self.is_premium,
-            "subscription_status": self.subscription_status,
         }
 
 
@@ -68,6 +64,9 @@ class QuizAttempt(Base):
     answers_json: Mapped[str] = mapped_column(Text, default="{}")
     profile_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     results_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    unlocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    unlocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stripe_checkout_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
@@ -103,17 +102,58 @@ class QuizAttempt(Base):
         self.results_json = json.dumps(value) if value is not None else None
 
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
-)
+def _build_engine():
+    if not TURSO_DATABASE_URL or not TURSO_AUTH_TOKEN:
+        raise RuntimeError(
+            "TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set. "
+            "Create a Turso database and add both values to backend/.env."
+        )
+    # TURSO_DATABASE_URL is typically libsql://….turso.io
+    db_url = f"sqlite+{TURSO_DATABASE_URL}?secure=true"
+    return create_engine(
+        db_url,
+        connect_args={"auth_token": TURSO_AUTH_TOKEN, "check_same_thread": False},
+    )
+
+
+engine = _build_engine()
 SessionLocal = sessionmaker(
     bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
 )
 
 
+def _ensure_attempt_unlock_columns() -> None:
+    """Add unlock columns if upgrading an older Turso/SQLite schema."""
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        cols = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(quiz_attempts)")).fetchall()
+        }
+        if "unlocked" not in cols:
+            conn.execute(
+                text("ALTER TABLE quiz_attempts ADD COLUMN unlocked BOOLEAN DEFAULT 0")
+            )
+        if "unlocked_at" not in cols:
+            conn.execute(
+                text("ALTER TABLE quiz_attempts ADD COLUMN unlocked_at DATETIME")
+            )
+        if "stripe_checkout_session_id" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE quiz_attempts ADD COLUMN stripe_checkout_session_id VARCHAR(255)"
+                )
+            )
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    try:
+        _ensure_attempt_unlock_columns()
+    except Exception:
+        # Fresh DBs / drivers that reject PRAGMA — create_all already applied schema.
+        pass
 
 
 def get_session():

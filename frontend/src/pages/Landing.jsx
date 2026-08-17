@@ -23,7 +23,7 @@ const STEPS = [
   },
   {
     title: 'Meet your matches',
-    body: 'See your best-fit programs. Premium unlocks your #1, deeper ranks, AI follow-ups, and essay approaches.',
+    body: 'See your free mid-range fits. Sign in to save history; unlock a result set once for #1, deeper ranks, and essay approaches.',
   },
 ]
 
@@ -39,7 +39,7 @@ const REVIEWS = [
     name: 'Jordan T.',
     role: 'HS senior · Texas',
     quote:
-      'Filled in my real SAT instead of picking a bucket. Felt more honest. Free results alone were useful; Premium was worth it for the #1 unlock.',
+      'Filled in my real SAT instead of picking a bucket. Felt more honest. Free results alone were useful; unlocking my #1 match was worth it.',
     rating: 5,
   },
   {
@@ -70,7 +70,7 @@ function Stars({ n }) {
   )
 }
 
-export default function Landing({ onStart, user, onRefreshUser }) {
+export default function Landing({ onStart, user, onRefreshUser, onMyResults }) {
   const [stats, setStats] = useState(null)
 
   useEffect(() => {
@@ -95,6 +95,7 @@ export default function Landing({ onStart, user, onRefreshUser }) {
         user={user}
         onHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         onRefreshUser={onRefreshUser}
+        onMyResults={user ? onMyResults : undefined}
         rightSlot={
           <button
             onClick={onStart}
@@ -135,7 +136,7 @@ export default function Landing({ onStart, user, onRefreshUser }) {
             Find my major
           </button>
           <p className="mt-3 text-sm text-slate-500">
-            Free core quiz · ~8 minutes · Sign in to save · Premium for full results
+            Free core quiz · ~8 minutes · Sign in to save · Unlock for full results
           </p>
         </div>
 
