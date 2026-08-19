@@ -103,6 +103,14 @@ class QuizAttempt(Base):
 
 
 def _build_engine():
+    import sys
+
+    # libsql-experimental SIGSEGV on Python 3.14 (see sqlalchemy-libsql#13).
+    if sys.version_info >= (3, 14):
+        raise RuntimeError(
+            "Turso/libsql crashes on Python 3.14. Recreate backend/.venv with "
+            "Python 3.12 or 3.13 (the Docker image uses 3.12)."
+        )
     if not TURSO_DATABASE_URL or not TURSO_AUTH_TOKEN:
         raise RuntimeError(
             "TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set. "
