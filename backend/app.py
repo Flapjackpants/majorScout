@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timezone
 from functools import wraps
 
+from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request, send_from_directory, session
@@ -24,14 +26,14 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+_CONFIGURED_FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 FRONTEND_DIST = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 )
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=FRONTEND_URL.startswith("https://"),
+    SESSION_COOKIE_SECURE=_CONFIGURED_FRONTEND_URL.startswith("https://"),
     PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,
 )
 ADMIN_EMAILS = {
@@ -40,10 +42,20 @@ ADMIN_EMAILS = {
     if e.strip()
 }
 
+_CORS_ORIGINS = {
+    _CONFIGURED_FRONTEND_URL,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://majorscout.com",
+    "https://www.majorscout.com",
+    "http://majorscout.com",
+    "http://www.majorscout.com",
+}
+
 CORS(
     app,
     supports_credentials=True,
-    origins=[FRONTEND_URL, "http://localhost:5173", "http://127.0.0.1:5173"],
+    origins=sorted(_CORS_ORIGINS),
 )
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
@@ -59,6 +71,53 @@ with open(os.path.join(os.path.dirname(__file__), "questions.json")) as f:
 QUESTIONS_BY_ID = {q["id"]: q for q in QUESTION_BANK["questions"]}
 
 init_db()
+
+# #region agent log
+_AGENT_LOG_PATH = "/Users/maxwellli/Documents/programming/majorScout/.cursor/debug-da3928.log"
+
+
+def _agent_dbg(hypothesis_id, location, message, data=None):
+    payload = {
+        "sessionId": "da3928",
+        "timestamp": int(time.time() * 1000),
+        "runId": "post-fix",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data or {},
+    }
+    line = json.dumps(payload, default=str)
+    try:
+        with open(_AGENT_LOG_PATH, "a") as _df:
+            _df.write(line + "\n")
+    except Exception:
+        pass
+    # Railway has no local log path — mirror to stdout for deploy verification.
+    print(f"[agent-dbg] {line}", flush=True)
+
+
+# #endregion
+
+
+def _site_url() -> str:
+    """Public origin for OAuth redirects — must match the browser tab (scheme + host)."""
+    if request:
+        return f"{request.scheme}://{request.host}".rstrip("/")
+    return _CONFIGURED_FRONTEND_URL
+
+
+@app.before_request
+def _sync_session_cookie_security():
+    # HTTPS browsers require Secure session cookies; ProxyFix makes request.scheme reliable.
+    if request.scheme == "https":
+        app.config["SESSION_COOKIE_SECURE"] = True
+    # Share the OAuth session cookie across apex and www so Google's callback host matches.
+    host = (request.host or "").split(":")[0].lower()
+    if host == "majorscout.com" or host.endswith(".majorscout.com"):
+        app.config["SESSION_COOKIE_DOMAIN"] = ".majorscout.com"
+    else:
+        app.config["SESSION_COOKIE_DOMAIN"] = None
+
 
 oauth = OAuth(app)
 google = oauth.register(
@@ -282,17 +341,83 @@ def match():
 def auth_google():
     if not os.environ.get("GOOGLE_CLIENT_ID"):
         return jsonify({"error": "Google OAuth is not configured."}), 503
-    # Use the Vite/frontend origin so the session cookie is set on the SPA host.
-    redirect_uri = f"{FRONTEND_URL}/api/auth/callback"
+    site = _site_url()
+    redirect_uri = f"{site}/api/auth/callback"
+    # #region agent log
+    _agent_dbg(
+        "A",
+        "app.py:auth_google",
+        "starting oauth",
+        {
+            "site_url": site,
+            "redirect_uri": redirect_uri,
+            "configured_frontend": _CONFIGURED_FRONTEND_URL,
+            "request_host": request.host,
+            "request_scheme": request.scheme,
+            "cookie_secure": app.config.get("SESSION_COOKIE_SECURE"),
+        },
+    )
+    # #endregion
     return google.authorize_redirect(redirect_uri)
+
+
+def _oauth_userinfo(token):
+    info = token.get("userinfo") if token else None
+    if info:
+        return info
+    resp = google.get(
+        "https://openidconnect.googleapis.com/v1/userinfo",
+        token=token,
+    )
+    return resp.json()
 
 
 @app.get("/api/auth/callback")
 def auth_callback():
-    token = google.authorize_access_token()
-    info = token.get("userinfo") or google.parse_id_token(token)
+    site = _site_url()
+    # #region agent log
+    _agent_dbg(
+        "B",
+        "app.py:auth_callback:entry",
+        "callback hit",
+        {
+            "site_url": site,
+            "request_host": request.host,
+            "request_scheme": request.scheme,
+            "has_code": bool(request.args.get("code")),
+            "has_state": bool(request.args.get("state")),
+            "google_error": request.args.get("error"),
+            "session_keys": list(session.keys()),
+            "has_oauth_state": any(str(k).startswith("_state_google") for k in session),
+        },
+    )
+    # #endregion
+    try:
+        token = google.authorize_access_token()
+        info = _oauth_userinfo(token)
+    except OAuthError as exc:
+        # #region agent log
+        _agent_dbg(
+            "B",
+            "app.py:auth_callback:oauth",
+            "oauth failed",
+            {"type": type(exc).__name__, "error": getattr(exc, "error", None), "msg": str(exc)[:400]},
+        )
+        # #endregion
+        return redirect(f"{site}/?auth=error")
+    except Exception as exc:
+        # #region agent log
+        _agent_dbg(
+            "E",
+            "app.py:auth_callback:oauth",
+            "unexpected oauth failure",
+            {"type": type(exc).__name__, "msg": str(exc)[:400]},
+        )
+        # #endregion
+        return redirect(f"{site}/?auth=error")
+
     if not info:
-        return redirect(f"{FRONTEND_URL}/?auth=error")
+        return redirect(f"{site}/?auth=error")
 
     google_id = info["sub"]
     email = (info.get("email") or "").lower()
@@ -323,10 +448,18 @@ def auth_callback():
         db.refresh(user)
         session["user_id"] = user.id
         session.permanent = True
+        # #region agent log
+        _agent_dbg(
+            "D",
+            "app.py:auth_callback:success",
+            "user signed in",
+            {"user_id": user.id, "email_domain": email.split("@")[-1] if "@" in email else None, "is_admin": user.is_admin},
+        )
+        # #endregion
     finally:
         db.close()
 
-    return redirect(f"{FRONTEND_URL}/?auth=success")
+    return redirect(f"{site}/?auth=success")
 
 
 @app.get("/api/auth/me")
@@ -443,8 +576,8 @@ def billing_checkout(user):
         mode="payment",
         customer=customer_id,
         line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
-        success_url=f"{FRONTEND_URL}/?billing=success&attempt_id={aid}",
-        cancel_url=f"{FRONTEND_URL}/?billing=cancel&attempt_id={aid}",
+        success_url=f"{_site_url()}/?billing=success&attempt_id={aid}",
+        cancel_url=f"{_site_url()}/?billing=cancel&attempt_id={aid}",
         client_reference_id=str(user.id),
         metadata={"user_id": str(user.id), "attempt_id": str(aid)},
     )
