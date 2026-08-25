@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -71,32 +70,6 @@ with open(os.path.join(os.path.dirname(__file__), "questions.json")) as f:
 QUESTIONS_BY_ID = {q["id"]: q for q in QUESTION_BANK["questions"]}
 
 init_db()
-
-# #region agent log
-_AGENT_LOG_PATH = "/Users/maxwellli/Documents/programming/majorScout/.cursor/debug-da3928.log"
-
-
-def _agent_dbg(hypothesis_id, location, message, data=None):
-    payload = {
-        "sessionId": "da3928",
-        "timestamp": int(time.time() * 1000),
-        "runId": "post-fix",
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data or {},
-    }
-    line = json.dumps(payload, default=str)
-    try:
-        with open(_AGENT_LOG_PATH, "a") as _df:
-            _df.write(line + "\n")
-    except Exception:
-        pass
-    # Railway has no local log path — mirror to stdout for deploy verification.
-    print(f"[agent-dbg] {line}", flush=True)
-
-
-# #endregion
 
 
 def _site_url() -> str:
@@ -343,21 +316,6 @@ def auth_google():
         return jsonify({"error": "Google OAuth is not configured."}), 503
     site = _site_url()
     redirect_uri = f"{site}/api/auth/callback"
-    # #region agent log
-    _agent_dbg(
-        "A",
-        "app.py:auth_google",
-        "starting oauth",
-        {
-            "site_url": site,
-            "redirect_uri": redirect_uri,
-            "configured_frontend": _CONFIGURED_FRONTEND_URL,
-            "request_host": request.host,
-            "request_scheme": request.scheme,
-            "cookie_secure": app.config.get("SESSION_COOKIE_SECURE"),
-        },
-    )
-    # #endregion
     return google.authorize_redirect(redirect_uri)
 
 
@@ -375,45 +333,12 @@ def _oauth_userinfo(token):
 @app.get("/api/auth/callback")
 def auth_callback():
     site = _site_url()
-    # #region agent log
-    _agent_dbg(
-        "B",
-        "app.py:auth_callback:entry",
-        "callback hit",
-        {
-            "site_url": site,
-            "request_host": request.host,
-            "request_scheme": request.scheme,
-            "has_code": bool(request.args.get("code")),
-            "has_state": bool(request.args.get("state")),
-            "google_error": request.args.get("error"),
-            "session_keys": list(session.keys()),
-            "has_oauth_state": any(str(k).startswith("_state_google") for k in session),
-        },
-    )
-    # #endregion
     try:
         token = google.authorize_access_token()
         info = _oauth_userinfo(token)
-    except OAuthError as exc:
-        # #region agent log
-        _agent_dbg(
-            "B",
-            "app.py:auth_callback:oauth",
-            "oauth failed",
-            {"type": type(exc).__name__, "error": getattr(exc, "error", None), "msg": str(exc)[:400]},
-        )
-        # #endregion
+    except OAuthError:
         return redirect(f"{site}/?auth=error")
-    except Exception as exc:
-        # #region agent log
-        _agent_dbg(
-            "E",
-            "app.py:auth_callback:oauth",
-            "unexpected oauth failure",
-            {"type": type(exc).__name__, "msg": str(exc)[:400]},
-        )
-        # #endregion
+    except Exception:
         return redirect(f"{site}/?auth=error")
 
     if not info:
@@ -448,14 +373,6 @@ def auth_callback():
         db.refresh(user)
         session["user_id"] = user.id
         session.permanent = True
-        # #region agent log
-        _agent_dbg(
-            "D",
-            "app.py:auth_callback:success",
-            "user signed in",
-            {"user_id": user.id, "email_domain": email.split("@")[-1] if "@" in email else None, "is_admin": user.is_admin},
-        )
-        # #endregion
     finally:
         db.close()
 
