@@ -445,7 +445,9 @@ def auth_logout():
             "has_session_cookie": "session" in request.cookies,
             "host": (request.host or "").split(":")[0].lower(),
             "scheme": request.scheme,
+            "clear_host_only": True,
         },
+        run_id="post-fix",
     )
     # #endregion
     session.clear()
@@ -460,10 +462,27 @@ def auth_logout():
                     "cookie_secure_cfg": cookie_secure,
                     "has_session_cookie": "session" in request.cookies,
                     "host": (request.host or "").split(":")[0].lower(),
+                    "clear_host_only": True,
                 },
             }
         )
     )
+    # Cloud: SESSION_COOKIE_DOMAIN may have changed over time. Browsers can keep a
+    # host-only "session" cookie alongside a Domain=.majorscout.com one; Flask's
+    # session.clear() only expires the configured Domain cookie. Clear both.
+    name = app.config.get("SESSION_COOKIE_NAME", "session")
+    cookie_kw = {
+        "path": "/",
+        "secure": cookie_secure,
+        "httponly": True,
+        "samesite": app.config.get("SESSION_COOKIE_SAMESITE") or "Lax",
+    }
+    resp.delete_cookie(name, **cookie_kw)
+    if cookie_domain:
+        resp.delete_cookie(name, domain=cookie_domain, **cookie_kw)
+        bare = str(cookie_domain).lstrip(".")
+        if bare and bare != cookie_domain:
+            resp.delete_cookie(name, domain=bare, **cookie_kw)
     return resp
 
 

@@ -43,12 +43,12 @@ export default function SiteHeader({
             <button
               onClick={async () => {
                 // #region agent log
-                fetch('http://127.0.0.1:7425/ingest/d3aede32-0091-4975-a520-4c72254a3255',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'028b02'},body:JSON.stringify({sessionId:'028b02',location:'SiteHeader.jsx:signOut',message:'sign out clicked',data:{host:location.host,hasRefresh:typeof onRefreshUser==='function'},timestamp:Date.now(),hypothesisId:'A',runId:'pre-fix'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7425/ingest/d3aede32-0091-4975-a520-4c72254a3255',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'028b02'},body:JSON.stringify({sessionId:'028b02',location:'SiteHeader.jsx:signOut',message:'sign out clicked',data:{host:location.host,hasRefresh:typeof onRefreshUser==='function'},timestamp:Date.now(),hypothesisId:'A',runId:'post-fix'})}).catch(()=>{});
                 // #endregion
                 await logout()
                 await onRefreshUser?.()
                 // #region agent log
-                fetch('http://127.0.0.1:7425/ingest/d3aede32-0091-4975-a520-4c72254a3255',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'028b02'},body:JSON.stringify({sessionId:'028b02',location:'SiteHeader.jsx:afterRefresh',message:'refresh after logout finished',data:{host:location.host},timestamp:Date.now(),hypothesisId:'E',runId:'pre-fix'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7425/ingest/d3aede32-0091-4975-a520-4c72254a3255',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'028b02'},body:JSON.stringify({sessionId:'028b02',location:'SiteHeader.jsx:afterRefresh',message:'refresh after logout finished',data:{host:location.host},timestamp:Date.now(),hypothesisId:'E',runId:'post-fix'})}).catch(()=>{});
                 // #endregion
               }}
               className="rounded-full border border-white/15 px-4 py-1.5 text-sm font-semibold text-slate-300 transition hover:border-sky-400/50 hover:text-white"
