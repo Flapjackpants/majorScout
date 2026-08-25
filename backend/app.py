@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timezone
 from functools import wraps
 
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, request, send_from_directory, session
+from flask import Flask, jsonify, make_response, redirect, request, send_from_directory, session
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 import stripe
@@ -70,6 +71,31 @@ with open(os.path.join(os.path.dirname(__file__), "questions.json")) as f:
 QUESTIONS_BY_ID = {q["id"]: q for q in QUESTION_BANK["questions"]}
 
 init_db()
+
+# #region agent log
+_AGENT_LOG_PATH = "/Users/maxwellli/Documents/programming/majorScout/.cursor/debug-028b02.log"
+
+
+def _agent_dbg(hypothesis_id, location, message, data=None, run_id="pre-fix"):
+    payload = {
+        "sessionId": "028b02",
+        "timestamp": int(time.time() * 1000),
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data or {},
+    }
+    line = json.dumps(payload, default=str)
+    try:
+        with open(_AGENT_LOG_PATH, "a") as _df:
+            _df.write(line + "\n")
+    except Exception:
+        pass
+    print(f"[agent-dbg] {line}", flush=True)
+
+
+# #endregion
 
 
 def _site_url() -> str:
@@ -382,6 +408,20 @@ def auth_callback():
 @app.get("/api/auth/me")
 def auth_me():
     user = current_user()
+    # #region agent log
+    _agent_dbg(
+        "D",
+        "app.py:auth_me",
+        "auth me",
+        {
+            "has_user_id": bool(session.get("user_id")),
+            "user_present": user is not None,
+            "cookie_domain_cfg": app.config.get("SESSION_COOKIE_DOMAIN"),
+            "has_session_cookie": "session" in request.cookies,
+            "host": (request.host or "").split(":")[0].lower(),
+        },
+    )
+    # #endregion
     if user is None:
         return jsonify({"user": None})
     return jsonify({"user": user.to_public()})
@@ -389,8 +429,42 @@ def auth_me():
 
 @app.post("/api/auth/logout")
 def auth_logout():
+    had_user_id = bool(session.get("user_id"))
+    cookie_domain = app.config.get("SESSION_COOKIE_DOMAIN")
+    cookie_secure = bool(app.config.get("SESSION_COOKIE_SECURE"))
+    # #region agent log
+    _agent_dbg(
+        "C",
+        "app.py:auth_logout",
+        "logout clearing session",
+        {
+            "had_user_id": had_user_id,
+            "session_keys_before": list(session.keys()),
+            "cookie_domain_cfg": cookie_domain,
+            "cookie_secure_cfg": cookie_secure,
+            "has_session_cookie": "session" in request.cookies,
+            "host": (request.host or "").split(":")[0].lower(),
+            "scheme": request.scheme,
+        },
+    )
+    # #endregion
     session.clear()
-    return jsonify({"ok": True})
+    resp = make_response(
+        jsonify(
+            {
+                "ok": True,
+                # Temporary debug payload for cloud verification (frontend logs it).
+                "_dbg": {
+                    "had_user_id": had_user_id,
+                    "cookie_domain_cfg": cookie_domain,
+                    "cookie_secure_cfg": cookie_secure,
+                    "has_session_cookie": "session" in request.cookies,
+                    "host": (request.host or "").split(":")[0].lower(),
+                },
+            }
+        )
+    )
+    return resp
 
 
 @app.post("/api/quiz/save")

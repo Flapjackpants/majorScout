@@ -16,6 +16,9 @@ export async function fetchMe() {
   const res = await api('/api/auth/me')
   if (!res.ok) return null
   const data = await res.json()
+  // #region agent log
+  fetch('http://127.0.0.1:7425/ingest/d3aede32-0091-4975-a520-4c72254a3255',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'028b02'},body:JSON.stringify({sessionId:'028b02',location:'api.js:fetchMe',message:'fetchMe result',data:{ok:res.ok,status:res.status,hasUser:!!data.user,host:location.host},timestamp:Date.now(),hypothesisId:'D',runId:'pre-fix'})}).catch(()=>{});
+  // #endregion
   return data.user
 }
 
@@ -24,7 +27,20 @@ export function startGoogleLogin() {
 }
 
 export async function logout() {
-  await api('/api/auth/logout', { method: 'POST', body: '{}' })
+  // #region agent log
+  fetch('http://127.0.0.1:7425/ingest/d3aede32-0091-4975-a520-4c72254a3255',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'028b02'},body:JSON.stringify({sessionId:'028b02',location:'api.js:logout:start',message:'logout starting',data:{host:location.host,origin:location.origin},timestamp:Date.now(),hypothesisId:'B',runId:'pre-fix'})}).catch(()=>{});
+  // #endregion
+  const res = await api('/api/auth/logout', { method: 'POST', body: '{}' })
+  let body = null
+  try {
+    body = await res.clone().json()
+  } catch {
+    body = null
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7425/ingest/d3aede32-0091-4975-a520-4c72254a3255',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'028b02'},body:JSON.stringify({sessionId:'028b02',location:'api.js:logout:done',message:'logout response',data:{ok:res.ok,status:res.status,dbg:body&&body._dbg?body._dbg:null,host:location.host},timestamp:Date.now(),hypothesisId:'C',runId:'pre-fix'})}).catch(()=>{});
+  // #endregion
+  return res
 }
 
 export async function startCheckout(attemptId) {
