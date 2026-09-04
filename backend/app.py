@@ -316,7 +316,10 @@ def auth_google():
         return jsonify({"error": "Google OAuth is not configured."}), 503
     site = _site_url()
     redirect_uri = f"{site}/api/auth/callback"
-    return google.authorize_redirect(redirect_uri)
+    kwargs = {}
+    if request.args.get("prompt") == "select_account":
+        kwargs["prompt"] = "select_account"
+    return google.authorize_redirect(redirect_uri, **kwargs)
 
 
 def _oauth_userinfo(token):

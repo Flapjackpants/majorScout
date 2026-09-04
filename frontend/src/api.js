@@ -19,8 +19,9 @@ export async function fetchMe() {
   return data.user
 }
 
-export function startGoogleLogin() {
-  window.location.href = '/api/auth/google'
+export function startGoogleLogin({ selectAccount = false } = {}) {
+  const q = selectAccount ? '?prompt=select_account' : ''
+  window.location.href = `/api/auth/google${q}`
 }
 
 export async function logout() {

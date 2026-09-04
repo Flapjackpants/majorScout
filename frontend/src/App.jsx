@@ -36,11 +36,14 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const authOk = params.get('auth') === 'success'
+    const authErr = params.get('auth') === 'error'
     const billingOk = params.get('billing') === 'success'
     const attemptIdParam = params.get('attempt_id')
-    if (!authOk && !billingOk) return
+    if (!authOk && !billingOk && !authErr) return
 
     window.history.replaceState({}, '', window.location.pathname)
+    if (authErr) return
+
     refreshUser().then(async () => {
       if (billingOk && attemptIdParam) {
         try {
