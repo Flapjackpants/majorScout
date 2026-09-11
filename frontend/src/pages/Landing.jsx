@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import SiteHeader from '../components/SiteHeader.jsx'
-import logo from '../assets/logo.png'
+import SiteFooter from '../components/SiteFooter.jsx'
 
 function StatCard({ value, label }) {
   return (
@@ -71,7 +71,7 @@ function Stars({ n }) {
   )
 }
 
-export default function Landing({ onStart, user, onRefreshUser, onMyResults }) {
+export default function Landing({ onStart, user, onRefreshUser, onMyResults, onNavigateLegal }) {
   const [stats, setStats] = useState(null)
 
   useEffect(() => {
@@ -198,12 +198,11 @@ export default function Landing({ onStart, user, onRefreshUser, onMyResults }) {
         </div>
       </main>
 
-      <footer className="border-t border-white/5 py-8 text-center text-sm text-slate-500">
-        <div className="flex items-center justify-center gap-2">
-          <img src={logo} alt="" className="h-5 w-5 shrink-0 rounded-full object-contain opacity-75" />
-          <span>MajorScout — matching students with programs using real admissions data.</span>
-        </div>
-      </footer>
+      <SiteFooter
+        onNavigateLegal={onNavigateLegal}
+        onHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        onStartQuiz={onStart}
+      />
     </div>
   )
 }

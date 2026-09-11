@@ -5,9 +5,21 @@ import CategoryHub from './pages/CategoryHub.jsx'
 import Quiz from './pages/Quiz.jsx'
 import Results from './pages/Results.jsx'
 import History from './pages/History.jsx'
+import Legal from './pages/Legal.jsx'
+
+function getInitialRoute() {
+  const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/'
+  if (path === '/privacy') return { view: 'legal', tab: 'privacy' }
+  if (path === '/terms') return { view: 'legal', tab: 'terms' }
+  if (path === '/disclaimer') return { view: 'legal', tab: 'disclaimer' }
+  if (path === '/legal') return { view: 'legal', tab: 'privacy' }
+  return { view: 'landing', tab: 'privacy' }
+}
 
 export default function App() {
-  const [view, setView] = useState('landing')
+  const [initialRoute] = useState(getInitialRoute)
+  const [view, setView] = useState(initialRoute.view)
+  const [legalTab, setLegalTab] = useState(initialRoute.tab)
   const [user, setUser] = useState(null)
   const [sections, setSections] = useState([])
   const [questionCounts, setQuestionCounts] = useState({})
@@ -89,6 +101,16 @@ export default function App() {
     })
   }, [refreshUser])
 
+  useEffect(() => {
+    function onPopState() {
+      const route = getInitialRoute()
+      setView(route.view)
+      setLegalTab(route.tab)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   async function openAttempt(attemptId) {
     try {
       const payload = await fetchAttempt(attemptId)
@@ -108,6 +130,24 @@ export default function App() {
     setView('hub')
   }
 
+  function openLegal(tab = 'privacy') {
+    setLegalTab(tab)
+    setView('legal')
+    const targetPath = `/${tab}`
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ view: 'legal', tab }, '', targetPath)
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function goHome() {
+    setView('landing')
+    if (window.location.pathname !== '/') {
+      window.history.pushState({}, '', '/')
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <div className="min-h-screen bg-slate-950">
       {view === 'landing' && (
@@ -116,6 +156,7 @@ export default function App() {
           onRefreshUser={refreshUser}
           onMyResults={goHistory}
           onStart={startQuizFlow}
+          onNavigateLegal={openLegal}
         />
       )}
 
@@ -124,7 +165,7 @@ export default function App() {
           sections={sections}
           counts={questionCounts}
           user={user}
-          onExit={() => setView('landing')}
+          onExit={goHome}
           onStartAll={() => {
             setStartSectionId(null)
             setView('quiz')
@@ -161,8 +202,9 @@ export default function App() {
           }}
           onHome={() => {
             setResultsPayload(null)
-            setView('landing')
+            goHome()
           }}
+          onNavigateLegal={openLegal}
         />
       )}
 
@@ -170,9 +212,21 @@ export default function App() {
         <History
           user={user}
           onRefreshUser={refreshUser}
-          onHome={() => setView('landing')}
+          onHome={goHome}
           onStartQuiz={startQuizFlow}
           onOpenAttempt={openAttempt}
+          onNavigateLegal={openLegal}
+        />
+      )}
+
+      {view === 'legal' && (
+        <Legal
+          user={user}
+          initialTab={legalTab}
+          onRefreshUser={refreshUser}
+          onHome={goHome}
+          onStartQuiz={startQuizFlow}
+          onNavigateLegal={openLegal}
         />
       )}
     </div>

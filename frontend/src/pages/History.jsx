@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchAttempts } from '../api.js'
 import SiteHeader from '../components/SiteHeader.jsx'
+import SiteFooter from '../components/SiteFooter.jsx'
 
 function formatDate(iso) {
   if (!iso) return 'Unknown date'
@@ -14,7 +15,7 @@ function formatDate(iso) {
   }
 }
 
-export default function History({ user, onRefreshUser, onHome, onOpenAttempt, onStartQuiz }) {
+export default function History({ user, onRefreshUser, onHome, onOpenAttempt, onStartQuiz, onNavigateLegal }) {
   const [attempts, setAttempts] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -129,6 +130,12 @@ export default function History({ user, onRefreshUser, onHome, onOpenAttempt, on
           </ul>
         )}
       </main>
+
+      <SiteFooter
+        onNavigateLegal={onNavigateLegal}
+        onHome={onHome}
+        onStartQuiz={onStartQuiz}
+      />
     </div>
   )
 }

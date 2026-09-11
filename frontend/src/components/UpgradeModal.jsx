@@ -1,6 +1,6 @@
 import { startCheckout, startGoogleLogin } from '../api.js'
 
-export default function UpgradeModal({ open, onClose, user, attemptId, feature }) {
+export default function UpgradeModal({ open, onClose, user, attemptId, feature, onNavigateLegal }) {
   if (!open) return null
 
   async function upgrade() {
@@ -56,6 +56,32 @@ export default function UpgradeModal({ open, onClose, user, attemptId, feature }
             Not now
           </button>
         </div>
+
+        <p className="mt-4 text-center text-[11px] text-slate-500">
+          By unlocking, you agree to our{' '}
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              onNavigateLegal?.('terms')
+            }}
+            className="text-slate-400 underline hover:text-sky-300"
+          >
+            Terms of Service
+          </button>{' '}
+          and{' '}
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              onNavigateLegal?.('privacy')
+            }}
+            className="text-slate-400 underline hover:text-sky-300"
+          >
+            Privacy Policy
+          </button>
+          .
+        </p>
       </div>
     </div>
   )

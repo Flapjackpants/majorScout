@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, startGoogleLogin } from '../api.js'
 import UpgradeModal from '../components/UpgradeModal.jsx'
+import SiteFooter from '../components/SiteFooter.jsx'
 import logo from '../assets/logo.png'
 
 const RING_RADIUS = 26
@@ -208,7 +209,7 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) 
   )
 }
 
-export default function Results({ payload, user, onRetake, onHome, onMyResults }) {
+export default function Results({ payload, user, onRetake, onHome, onMyResults, onNavigateLegal }) {
   const results = payload?.results || []
   const attemptId = payload?.attemptId
   const unlocked = Boolean(payload?.unlocked || user?.is_admin)
@@ -264,6 +265,7 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults }
         user={user}
         attemptId={attemptId}
         feature="One-time unlock for this quiz: your #1 match, deeper rankings (#9+), and essay approaches."
+        onNavigateLegal={onNavigateLegal}
       />
 
       <header className="flex items-center justify-between">
@@ -377,6 +379,14 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults }
         >
           Retake the quiz
         </button>
+      </div>
+
+      <div className="mt-20">
+        <SiteFooter
+          onNavigateLegal={onNavigateLegal}
+          onHome={onHome}
+          onStartQuiz={onRetake}
+        />
       </div>
     </div>
   )
