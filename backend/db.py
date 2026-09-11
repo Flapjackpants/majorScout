@@ -17,6 +17,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.pool import NullPool
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -118,8 +119,16 @@ def _build_engine():
         )
     # TURSO_DATABASE_URL is typically libsql://….turso.io
     db_url = f"sqlite+{TURSO_DATABASE_URL}?secure=true"
+    # NullPool: open a fresh remote connection per session and close it on release.
+    # The URL has no database path, so SQLAlchemy's SQLite dialect would otherwise
+    # default to SingletonThreadPool and hold one connection per thread forever.
+    # Turso expires idle Hrana streams server-side, so a long-lived pooled connection
+    # eventually fails every query with "Hrana: ... stream not found" until restart.
+    # The driver raises a plain ValueError for this, which SQLAlchemy does not treat
+    # as a disconnect, so pool_pre_ping/pool_recycle cannot recover it reliably.
     return create_engine(
         db_url,
+        poolclass=NullPool,
         connect_args={"auth_token": TURSO_AUTH_TOKEN, "check_same_thread": False},
     )
 
