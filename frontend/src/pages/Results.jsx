@@ -210,7 +210,20 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) 
   )
 }
 
-export default function Results({ payload, user, onRetake, onHome, onMyResults, onNavigateLegal }) {
+function scrollToEssayGuidance() {
+  const el = document.getElementById('essay-guidance-anchor')
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+export default function Results({
+  payload,
+  user,
+  focusEssayKey,
+  onRetake,
+  onHome,
+  onMyResults,
+  onNavigateLegal,
+}) {
   const results = payload?.results || []
   const attemptId = payload?.attemptId
   const unlocked = Boolean(payload?.unlocked || user?.is_admin || user?.is_pro)
@@ -218,6 +231,14 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults, 
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [guidance, setGuidance] = useState(null)
   const [loadingGuidance, setLoadingGuidance] = useState(false)
+
+  // "Access PRO+ Features & Essay Help" buttons bump focusEssayKey; scroll to
+  // the essay section once the cards have rendered.
+  useEffect(() => {
+    if (!focusEssayKey || !results.length) return
+    const id = window.setTimeout(scrollToEssayGuidance, 60)
+    return () => window.clearTimeout(id)
+  }, [focusEssayKey, results.length])
 
   useEffect(() => {
     if (!unlocked || !attemptId || !user) return
@@ -353,10 +374,7 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults, 
         {unlocked && (
           <div className="mt-4 flex justify-center">
             <button
-              onClick={() => {
-                const el = document.getElementById('essay-guidance-anchor')
-                el?.scrollIntoView({ behavior: 'smooth' })
-              }}
+              onClick={scrollToEssayGuidance}
               className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-amber-400/25 transition hover:scale-105"
             >
               <span>📝</span> Jump to PRO+ Essay Help & Guides

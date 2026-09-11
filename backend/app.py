@@ -61,6 +61,38 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
 STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 
+
+def _stripe_to_dict(obj) -> dict:
+    """Return a plain dict for a Stripe API object.
+
+    stripe-python >= 15 removed ``dict`` inheritance from ``StripeObject`` so
+    ``.get()`` raises. ``to_dict()`` recursively converts to native types on
+    every supported version; plain dicts and ``None`` pass through unchanged.
+    """
+    if obj is None:
+        return {}
+    to_dict = getattr(obj, "to_dict", None)
+    if callable(to_dict):
+        try:
+            converted = to_dict()
+            if isinstance(converted, dict):
+                return converted
+        except Exception:
+            pass
+    if isinstance(obj, dict):
+        return dict(obj)
+    return {}
+
+
+def _stripe_id(value):
+    """Stripe fields may be a bare id string or an expanded object; return the id."""
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return None
+    return _stripe_to_dict(value).get("id")
+
+
 PROGRAMS = load_programs()
 MATCHER = Matcher(PROGRAMS)
 
@@ -539,7 +571,7 @@ def billing_checkout(user):
         customer=customer_id,
         line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
         success_url=f"{_site_url()}/?billing=success&session_id={{CHECKOUT_SESSION_ID}}{attempt_param}",
-        cancel_url=f"{_site_url()}/?billing=cancel&session_id={{CHECKOUT_SESSION_ID}}{attempt_param}",
+        cancel_url=f"{_site_url()}/?billing=cancel{attempt_param}",
         client_reference_id=str(user.id),
         metadata=metadata,
     )
@@ -547,8 +579,7 @@ def billing_checkout(user):
 
 
 @app.post("/api/billing/verify-session")
-@login_required
-def billing_verify_session(user):
+def billing_verify_session():
     if not stripe.api_key:
         return jsonify({"error": "Stripe is not configured."}), 503
 
@@ -556,20 +587,23 @@ def billing_verify_session(user):
     session_id = payload.get("session_id")
     attempt_id = payload.get("attempt_id")
 
+    # Guard against literal un-interpolated template string
+    if session_id in ("{CHECKOUT_SESSION_ID}", ""):
+        session_id = None
+
     if not session_id and not attempt_id:
         return jsonify({"error": "session_id or attempt_id is required."}), 400
 
+    user = current_user()
     db = get_session()
     try:
-        u = db.get(User, user.id)
-        if not u:
-            return jsonify({"error": "User not found."}), 404
-
         session_obj = None
         if session_id:
             try:
-                session_obj = stripe.checkout.Session.retrieve(
-                    session_id, expand=["payment_intent"]
+                session_obj = _stripe_to_dict(
+                    stripe.checkout.Session.retrieve(
+                        session_id, expand=["payment_intent"]
+                    )
                 )
             except Exception as e:
                 return jsonify({
@@ -579,25 +613,50 @@ def billing_verify_session(user):
                     "message": f"Could not verify session with Stripe: {str(e)}",
                 }), 400
 
-        if session_obj:
-            meta = session_obj.metadata or {}
-            target_attempt_id = meta.get("attempt_id") or attempt_id
+        user_id = user.id if user else None
+        if not user_id and session_obj:
+            meta = session_obj.get("metadata") or {}
+            raw_uid = meta.get("user_id") or session_obj.get("client_reference_id")
+            if raw_uid:
+                try:
+                    user_id = int(raw_uid)
+                except (ValueError, TypeError):
+                    user_id = None
 
-            is_paid = session_obj.payment_status == "paid"
-            is_complete = session_obj.status == "complete"
+        if not user_id:
+            return jsonify({"error": "Authentication required."}), 401
+
+        u = db.get(User, user_id)
+        if not u:
+            return jsonify({"error": "User not found."}), 404
+
+        # Maintain session login for the returning user
+        session["user_id"] = u.id
+
+        if session_obj:
+            meta = session_obj.get("metadata") or {}
+            target_attempt_id = meta.get("attempt_id") or attempt_id
+            session_status = session_obj.get("status")
+            customer_id = _stripe_id(session_obj.get("customer"))
+
+            is_paid = session_obj.get("payment_status") == "paid"
+            is_complete = session_status == "complete"
 
             if is_paid or is_complete:
                 target_attempt = None
                 if target_attempt_id:
-                    target_attempt = db.get(QuizAttempt, int(target_attempt_id))
+                    try:
+                        target_attempt = db.get(QuizAttempt, int(target_attempt_id))
+                    except (ValueError, TypeError):
+                        target_attempt = None
                     if target_attempt and target_attempt.user_id == u.id:
                         target_attempt.unlocked = True
                         target_attempt.unlocked_at = datetime.now(timezone.utc)
-                        target_attempt.stripe_checkout_session_id = session_obj.id
+                        target_attempt.stripe_checkout_session_id = session_obj.get("id")
 
                 u.subscription_status = "pro"
-                if session_obj.customer and not u.stripe_customer_id:
-                    u.stripe_customer_id = session_obj.customer
+                if customer_id and not u.stripe_customer_id:
+                    u.stripe_customer_id = customer_id
                 db.commit()
 
                 if not target_attempt:
@@ -618,15 +677,14 @@ def billing_verify_session(user):
                     "user": u.to_public(),
                 })
 
-            payment_intent = session_obj.payment_intent
+            payment_intent = session_obj.get("payment_intent")
             last_err = None
             pi_status = None
-            if isinstance(payment_intent, dict) or hasattr(payment_intent, "get"):
+            if isinstance(payment_intent, dict):
                 pi_status = payment_intent.get("status")
                 last_err = payment_intent.get("last_payment_error")
-            elif payment_intent:
-                pi_status = getattr(payment_intent, "status", None)
-                last_err = getattr(payment_intent, "last_payment_error", None)
+            if last_err is not None and not isinstance(last_err, dict):
+                last_err = _stripe_to_dict(last_err)
 
             if pi_status == "processing":
                 return jsonify({
@@ -637,16 +695,8 @@ def billing_verify_session(user):
                 })
 
             if last_err:
-                err_msg = (
-                    last_err.get("message")
-                    if isinstance(last_err, dict)
-                    else getattr(last_err, "message", "Payment authorization failed.")
-                )
-                decline_code = (
-                    last_err.get("decline_code")
-                    if isinstance(last_err, dict)
-                    else getattr(last_err, "decline_code", None)
-                )
+                err_msg = last_err.get("message") or "Payment authorization failed."
+                decline_code = last_err.get("decline_code")
                 full_msg = f"{err_msg} ({decline_code})" if decline_code else err_msg
                 return jsonify({
                     "success": False,
@@ -656,7 +706,7 @@ def billing_verify_session(user):
                     "attempt_id": target_attempt_id,
                 })
 
-            if session_obj.status == "expired":
+            if session_status == "expired":
                 return jsonify({
                     "success": False,
                     "status": "expired",
@@ -674,7 +724,10 @@ def billing_verify_session(user):
             })
 
         if attempt_id:
-            att = db.get(QuizAttempt, int(attempt_id))
+            try:
+                att = db.get(QuizAttempt, int(attempt_id))
+            except (ValueError, TypeError):
+                att = None
             if att and att.user_id == u.id and (att.unlocked or u.is_pro):
                 return jsonify({
                     "success": True,
@@ -691,6 +744,13 @@ def billing_verify_session(user):
             "error": "Payment session not found.",
             "message": "Could not locate that checkout session.",
         }), 404
+    except Exception as exc:
+        return jsonify({
+            "success": False,
+            "status": "error",
+            "error": str(exc),
+            "message": f"Server error verifying session: {str(exc)}",
+        }), 500
     finally:
         db.close()
 
@@ -714,7 +774,7 @@ def billing_webhook():
         return jsonify({"error": str(exc)}), 400
 
     etype = event["type"]
-    data = event["data"]["object"]
+    data = _stripe_to_dict(event["data"]["object"])
 
     if etype != "checkout.session.completed":
         return jsonify({"ok": True})
@@ -724,7 +784,7 @@ def billing_webhook():
         meta = data.get("metadata") or {}
         attempt_id = meta.get("attempt_id")
         user_id = meta.get("user_id") or data.get("client_reference_id")
-        customer_id = data.get("customer")
+        customer_id = _stripe_id(data.get("customer"))
         session_id = data.get("id")
 
         if attempt_id:
@@ -815,6 +875,31 @@ def premium_essay(user):
         unlocked_results = MATCHER.match(profile, top_n=15)
     guidance = generate_essay_guidance(profile, unlocked_results)
     return jsonify({"guidance": guidance})
+
+
+@app.errorhandler(404)
+def handle_404(err):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "API route not found.", "status": 404}), 404
+    # SPA fallback for frontend routes when served by Flask
+    index = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.isfile(index):
+        return send_from_directory(FRONTEND_DIST, "index.html")
+    return jsonify({"error": "Not found"}), 404
+
+
+@app.errorhandler(405)
+def handle_405(err):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Method not allowed.", "status": 405}), 405
+    return jsonify({"error": "Method not allowed"}), 405
+
+
+@app.errorhandler(500)
+def handle_500(err):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Internal server error.", "status": 500}), 500
+    return "Internal server error", 500
 
 
 @app.get("/", defaults={"path": ""})

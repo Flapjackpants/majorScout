@@ -29,6 +29,7 @@ export default function App() {
   const [billingNotice, setBillingNotice] = useState(null)
   const [proCelebration, setProCelebration] = useState(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [resultsFocusKey, setResultsFocusKey] = useState(0)
 
   const refreshUser = useCallback(() => {
     return fetchMe().then(setUser).catch(() => setUser(null))
@@ -71,33 +72,12 @@ export default function App() {
     }
 
     if (billingParam === 'cancel') {
-      if (sessionIdParam) {
-        verifyCheckoutSession({ sessionId: sessionIdParam, attemptId: attemptIdParam })
-          .then((res) => {
-            setBillingNotice({
-              type: 'error',
-              title: 'Payment Cancelled',
-              message: res.message || 'Payment checkout was cancelled before completion.',
-              details: res.error,
-              attemptId: attemptIdParam,
-            })
-          })
-          .catch(() => {
-            setBillingNotice({
-              type: 'error',
-              title: 'Payment Cancelled',
-              message: 'Checkout was cancelled. Your card was not charged and PRO+ was not activated.',
-              attemptId: attemptIdParam,
-            })
-          })
-      } else {
-        setBillingNotice({
-          type: 'error',
-          title: 'Payment Cancelled',
-          message: 'Checkout was cancelled. Your card was not charged and PRO+ was not activated.',
-          attemptId: attemptIdParam,
-        })
-      }
+      setBillingNotice({
+        type: 'error',
+        title: 'Payment Cancelled',
+        message: 'Checkout was cancelled. Your card was not charged and PRO+ was not activated.',
+        attemptId: attemptIdParam,
+      })
       return
     }
 
@@ -111,8 +91,11 @@ export default function App() {
       return
     }
 
-    if (billingParam === 'success' || sessionIdParam) {
-      verifyCheckoutSession({ sessionId: sessionIdParam, attemptId: attemptIdParam })
+    const validSessionId =
+      sessionIdParam && sessionIdParam !== '{CHECKOUT_SESSION_ID}' ? sessionIdParam : undefined
+
+    if (billingParam === 'success' || validSessionId) {
+      verifyCheckoutSession({ sessionId: validSessionId, attemptId: attemptIdParam })
         .then(async (res) => {
           await refreshUser()
           if (res.success || res.status === 'paid') {
@@ -148,11 +131,30 @@ export default function App() {
               attemptId: attemptIdParam,
             })
           } else {
+            // Check fallback: if the attempt was already unlocked (e.g. by webhook)
+            if (attemptIdParam) {
+              try {
+                const checkAttempt = await fetchAttempt(attemptIdParam)
+                if (checkAttempt?.unlocked) {
+                  setResultsPayload(checkAttempt)
+                  setView('results')
+                  setBillingNotice({
+                    type: 'success',
+                    title: 'PRO+ Activated',
+                    message: 'Your PRO+ results are unlocked!',
+                    attemptId: attemptIdParam,
+                  })
+                  return
+                }
+              } catch {
+                /* ignore */
+              }
+            }
             setBillingNotice({
               type: 'error',
-              title: 'Payment Unsuccessful',
-              message: res.message || 'Payment could not be completed.',
-              details: res.error || (res.status ? `Status: ${res.status}` : undefined),
+              title: 'Payment Notice',
+              message: res.message || res.error || 'Could not verify payment completion.',
+              details: res.error && res.message !== res.error ? res.error : undefined,
               attemptId: attemptIdParam,
             })
           }
@@ -160,7 +162,7 @@ export default function App() {
         .catch((err) => {
           setBillingNotice({
             type: 'error',
-            title: 'Payment Verification Error',
+            title: 'Payment Notice',
             message: err.message || 'Could not verify payment status with Stripe.',
             attemptId: attemptIdParam,
           })
@@ -212,26 +214,39 @@ export default function App() {
       const payload = await fetchAttempt(attemptId)
       setResultsPayload(payload)
       setView('results')
+      return true
     } catch (err) {
       alert(err.message || 'Could not open that attempt.')
+      return false
     }
   }
 
   async function openProFeatures(preferredId) {
-    const targetId = preferredId || resultsPayload?.attemptId
+    // Callers may pass this straight to onClick, in which case the arg is a MouseEvent.
+    const explicitId =
+      typeof preferredId === 'number' || typeof preferredId === 'string' ? preferredId : null
+    const targetId = explicitId || resultsPayload?.attemptId
+    let opened = false
     if (targetId) {
-      await openAttempt(targetId)
-      return
-    }
-    try {
-      const attempts = await fetchAttempts()
-      if (attempts && attempts.length > 0) {
-        await openAttempt(attempts[0].id)
-      } else {
+      opened = await openAttempt(targetId)
+    } else {
+      try {
+        const attempts = await fetchAttempts()
+        if (attempts && attempts.length > 0) {
+          opened = await openAttempt(attempts[0].id)
+        } else {
+          startQuizFlow()
+          return
+        }
+      } catch {
         startQuizFlow()
+        return
       }
-    } catch {
-      startQuizFlow()
+    }
+    if (opened) {
+      // Bump the key so Results scrolls to the PRO+ essay section, even if it
+      // was already the active view.
+      setResultsFocusKey(Date.now())
     }
   }
 
@@ -431,6 +446,7 @@ export default function App() {
         <Results
           payload={resultsPayload}
           user={user}
+          focusEssayKey={resultsFocusKey}
           onMyResults={user ? goHistory : undefined}
           onRetake={() => {
             setResultsPayload(null)
