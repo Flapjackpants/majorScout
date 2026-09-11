@@ -6,6 +6,8 @@ import Quiz from './pages/Quiz.jsx'
 import Results from './pages/Results.jsx'
 import History from './pages/History.jsx'
 import Legal from './pages/Legal.jsx'
+import EssayHelp from './pages/EssayHelp.jsx'
+import Admissions from './pages/Admissions.jsx'
 import UpgradeModal from './components/UpgradeModal.jsx'
 
 function getInitialRoute() {
@@ -14,6 +16,7 @@ function getInitialRoute() {
   if (path === '/terms') return { view: 'legal', tab: 'terms' }
   if (path === '/disclaimer') return { view: 'legal', tab: 'disclaimer' }
   if (path === '/legal') return { view: 'legal', tab: 'privacy' }
+  if (path === '/admissions') return { view: 'admissions', tab: 'privacy' }
   return { view: 'landing', tab: 'privacy' }
 }
 
@@ -30,6 +33,7 @@ export default function App() {
   const [proCelebration, setProCelebration] = useState(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [resultsFocusKey, setResultsFocusKey] = useState(0)
+  const [essayProgram, setEssayProgram] = useState(null)
 
   const refreshUser = useCallback(() => {
     return fetchMe().then(setUser).catch(() => setUser(null))
@@ -193,6 +197,11 @@ export default function App() {
           profileSummary: data.profile_summary || pending.profileSummary,
         })
         setView('results')
+        // Guest clicked "Unlock PRO+" on the end-of-quiz paywall before signing
+        // in; pick the upgrade flow back up now that an attempt exists.
+        if (pending.upgradeIntent && !data.unlocked) {
+          setUpgradeOpen(true)
+        }
       } catch {
         sessionStorage.removeItem('pendingQuiz')
       }
@@ -254,6 +263,26 @@ export default function App() {
     setView('history')
   }
 
+  function goAdmissions() {
+    setView('admissions')
+    if (window.location.pathname !== '/admissions') {
+      window.history.pushState({ view: 'admissions' }, '', '/admissions')
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function openEssayHelp(program) {
+    if (!program) return
+    setEssayProgram({
+      university: program.university,
+      major: program.major,
+      college: program.college,
+      rank: program.rank,
+    })
+    setView('essayHelp')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   function startQuizFlow() {
     setStartSectionId(null)
     setView('hub')
@@ -275,6 +304,13 @@ export default function App() {
       window.history.pushState({}, '', '/')
     }
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  /** In-app views (quiz/results/history/essayHelp) live at "/" so refresh is safe. */
+  function resetPathToRoot() {
+    if (window.location.pathname !== '/') {
+      window.history.pushState({}, '', '/')
+    }
   }
 
   return (
@@ -397,7 +433,7 @@ export default function App() {
         onClose={() => setUpgradeOpen(false)}
         user={user}
         attemptId={resultsPayload?.attemptId}
-        feature="Upgrade to PRO+ to unlock your #1 match, deeper rankings (#9+), and school-specific essay approach guides."
+        feature="Upgrade to PRO+ to unlock your #1 match, deeper rankings (#9+), AI-tailored questions, and Essay Help with graded feedback."
         onNavigateLegal={openLegal}
       />
 
@@ -406,6 +442,7 @@ export default function App() {
           user={user}
           onRefreshUser={refreshUser}
           onMyResults={goHistory}
+          onAdmissions={goAdmissions}
           onOpenProFeatures={openProFeatures}
           onStart={startQuizFlow}
           onNavigateLegal={openLegal}
@@ -435,6 +472,7 @@ export default function App() {
           startSectionId={startSectionId}
           includePremiumFollowup
           onExit={() => setView('hub')}
+          onNavigateLegal={openLegal}
           onComplete={(payload) => {
             setResultsPayload(payload)
             setView('results')
@@ -448,6 +486,8 @@ export default function App() {
           user={user}
           focusEssayKey={resultsFocusKey}
           onMyResults={user ? goHistory : undefined}
+          onAdmissions={user ? goAdmissions : undefined}
+          onEssayHelp={openEssayHelp}
           onRetake={() => {
             setResultsPayload(null)
             setStartSectionId(null)
@@ -469,6 +509,57 @@ export default function App() {
           onStartQuiz={startQuizFlow}
           onOpenAttempt={openAttempt}
           onOpenProFeatures={openProFeatures}
+          onAdmissions={goAdmissions}
+          onNavigateLegal={openLegal}
+        />
+      )}
+
+      {view === 'essayHelp' && (
+        <EssayHelp
+          payload={resultsPayload}
+          program={essayProgram}
+          user={user}
+          onRefreshUser={refreshUser}
+          onHome={() => {
+            setEssayProgram(null)
+            goHome()
+          }}
+          onBack={() => {
+            setEssayProgram(null)
+            setView('results')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onProfileSaved={(updated) => {
+            // Keep the AI answers / activities in sync everywhere else.
+            setResultsPayload((prev) => ({ ...(prev || {}), ...updated }))
+          }}
+          onOpenProFeatures={openProFeatures}
+          onAdmissions={goAdmissions}
+          onNavigateLegal={openLegal}
+        />
+      )}
+
+      {view === 'admissions' && (
+        <Admissions
+          user={user}
+          onRefreshUser={refreshUser}
+          onHome={goHome}
+          onStartQuiz={() => {
+            resetPathToRoot()
+            startQuizFlow()
+          }}
+          onMyResults={
+            user
+              ? () => {
+                  resetPathToRoot()
+                  goHistory()
+                }
+              : undefined
+          }
+          onOpenProFeatures={(id) => {
+            resetPathToRoot()
+            openProFeatures(id)
+          }}
           onNavigateLegal={openLegal}
         />
       )}

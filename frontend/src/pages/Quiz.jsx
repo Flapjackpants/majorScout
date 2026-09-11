@@ -1,7 +1,104 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api } from '../api.js'
+import { api, fetchFollowupQuestions, startCheckout, startGoogleLogin } from '../api.js'
+import ActivitiesEditor from '../components/ActivitiesEditor.jsx'
+import { activitiesSummary, cleanActivitiesValue, emptyActivitiesValue } from '../lib/activities.js'
 
 const OPTION_KEYS = ['1', '2', '3', '4']
+
+/**
+ * End-of-quiz popup for non-PRO+ users. Explains what the AI-tailored
+ * questions unlock and offers to pay now or continue to free results.
+ */
+function AiQuestionsPaywall({ open, user, busy, error, onUnlock, onContinue, onNavigateLegal }) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 px-4 backdrop-blur-sm">
+      <div className="animate-fade-up w-full max-w-lg rounded-3xl border border-amber-400/30 bg-gradient-to-b from-slate-900 to-slate-950 p-7 shadow-2xl shadow-amber-500/10">
+        <div className="flex items-center justify-between">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
+            <span>⚡</span> PRO+
+          </div>
+          <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+            Quiz complete
+          </span>
+        </div>
+        <h2 className="mt-4 text-2xl font-black text-white sm:text-3xl">
+          Go deeper with AI-tailored questions
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-400">
+          You've finished the core quiz. PRO+ members continue with a short set of questions
+          written by AI from your answers, plus a guided extracurriculars &amp; awards profile.
+          Everything you enter feeds directly into your essay grading and school-specific hooks.
+        </p>
+
+        <ul className="mt-5 space-y-2.5 text-sm text-slate-300">
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 font-bold text-amber-400">✓</span>
+            <div>
+              <strong className="text-white">AI follow-up questions</strong> — generated from your
+              answers to sharpen your matches and your story.
+            </div>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 font-bold text-amber-400">✓</span>
+            <div>
+              <strong className="text-white">Extracurriculars &amp; awards profile</strong> — a guided
+              editor for activities, commitment, and award levels.
+            </div>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 font-bold text-amber-400">✓</span>
+            <div>
+              <strong className="text-white">Essay Help</strong> — paste any prompt + draft and get a
+              graded rubric with fixes written in your own voice.
+            </div>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 font-bold text-amber-400">✓</span>
+            <div>
+              <strong className="text-white">#1 match + deeper ranks</strong> — the full 15-program list.
+            </div>
+          </li>
+        </ul>
+
+        {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
+
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
+          <button
+            onClick={onUnlock}
+            disabled={busy}
+            className="flex-1 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition hover:scale-[1.02] disabled:opacity-60"
+          >
+            {busy ? 'One moment…' : user ? 'Unlock PRO+ & continue' : 'Sign in to unlock PRO+'}
+          </button>
+          <button
+            onClick={onContinue}
+            disabled={busy}
+            className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/5 disabled:opacity-60"
+          >
+            See my free results
+          </button>
+        </div>
+        <p className="mt-4 text-center text-[11px] text-slate-500">
+          You can unlock PRO+ later from your results and complete these questions from Essay Help.
+          {onNavigateLegal && (
+            <>
+              {' '}
+              <button
+                type="button"
+                onClick={() => onNavigateLegal('terms')}
+                className="underline hover:text-amber-300"
+              >
+                Terms
+              </button>
+              .
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  )
+}
 
 export default function Quiz({
   onComplete,
@@ -9,6 +106,7 @@ export default function Quiz({
   user,
   startSectionId,
   includePremiumFollowup,
+  onNavigateLegal,
 }) {
   const [bank, setBank] = useState(null)
   const [index, setIndex] = useState(0)
@@ -16,8 +114,11 @@ export default function Quiz({
   const [selected, setSelected] = useState(null)
   const [numberValue, setNumberValue] = useState('')
   const [textValue, setTextValue] = useState('')
+  const [activitiesValue, setActivitiesValue] = useState(emptyActivitiesValue)
   const [submitting, setSubmitting] = useState(false)
   const [loadingFollowup, setLoadingFollowup] = useState(false)
+  const [paywallOpen, setPaywallOpen] = useState(false)
+  const [paywallBusy, setPaywallBusy] = useState(false)
   const [error, setError] = useState(null)
   const [phase, setPhase] = useState('base') // base | followup
 
@@ -67,6 +168,11 @@ export default function Quiz({
       setTextValue(existing != null ? String(existing) : '')
       setNumberValue('')
       setSelected(null)
+    } else if (question.type === 'activities') {
+      setActivitiesValue(existing && typeof existing === 'object' ? existing : emptyActivitiesValue())
+      setNumberValue('')
+      setTextValue('')
+      setSelected(null)
     } else {
       setSelected(existing || null)
       setNumberValue('')
@@ -74,23 +180,28 @@ export default function Quiz({
     }
   }, [question?.id])
 
+  /** Score the answers; returns the results payload without navigating. */
+  async function computeMatch(finalAnswers) {
+    const res = await api('/api/match', {
+      method: 'POST',
+      body: JSON.stringify({ answers: finalAnswers }),
+    })
+    if (!res.ok) throw new Error('match failed')
+    const data = await res.json()
+    return {
+      results: data.results,
+      unlocked: data.unlocked,
+      answers: finalAnswers,
+      attemptId: data.attempt_id,
+      profileSummary: data.profile_summary,
+    }
+  }
+
   async function submit(finalAnswers) {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await api('/api/match', {
-        method: 'POST',
-        body: JSON.stringify({ answers: finalAnswers }),
-      })
-      if (!res.ok) throw new Error('match failed')
-      const data = await res.json()
-      onComplete({
-        results: data.results,
-        unlocked: data.unlocked,
-        answers: finalAnswers,
-        attemptId: data.attempt_id,
-        profileSummary: data.profile_summary,
-      })
+      onComplete(await computeMatch(finalAnswers))
     } catch {
       setError('Something went wrong computing your matches. Please try again.')
       setSubmitting(false)
@@ -98,24 +209,18 @@ export default function Quiz({
   }
 
   async function maybeLoadFollowup(currentAnswers) {
-    // AI follow-ups require a signed-in account (not a paid unlock).
-    if (!includePremiumFollowup || !user) {
+    if (!includePremiumFollowup) {
       await submit(currentAnswers)
+      return
+    }
+    // AI follow-ups are PRO+ only. Free / guest users get the paywall popup.
+    if (!user?.is_pro) {
+      setPaywallOpen(true)
       return
     }
     setLoadingFollowup(true)
     try {
-      const res = await api('/api/premium/followup', {
-        method: 'POST',
-        body: JSON.stringify({ answers: currentAnswers }),
-      })
-      if (res.status === 403) {
-        await submit(currentAnswers)
-        return
-      }
-      if (!res.ok) throw new Error('followup failed')
-      const data = await res.json()
-      const extra = data.questions || []
+      const extra = await fetchFollowupQuestions({ answers: currentAnswers })
       if (extra.length === 0) {
         await submit(currentAnswers)
         return
@@ -129,6 +234,40 @@ export default function Quiz({
       setLoadingFollowup(false)
     } catch {
       await submit(currentAnswers)
+    }
+  }
+
+  /**
+   * Paywall "Unlock PRO+": guests sign in first (quiz is stashed and saved
+   * after OAuth); signed-in users get an attempt created and go to Stripe.
+   */
+  async function unlockFromPaywall() {
+    setPaywallBusy(true)
+    setError(null)
+    try {
+      if (!user) {
+        try {
+          sessionStorage.setItem(
+            'pendingQuiz',
+            JSON.stringify({ answers, upgradeIntent: true })
+          )
+        } catch {
+          /* ignore */
+        }
+        startGoogleLogin()
+        return
+      }
+      const payload = await computeMatch(answers)
+      if (!payload.attemptId) {
+        onComplete(payload)
+        return
+      }
+      // After Stripe redirects back, App.jsx verifies the session and reopens
+      // this attempt, so nothing else needs to be stashed here.
+      await startCheckout(payload.attemptId)
+    } catch (err) {
+      setPaywallBusy(false)
+      setError(err?.message || 'Could not start PRO+ checkout. Please try again.')
     }
   }
 
@@ -198,6 +337,21 @@ export default function Quiz({
     advance(nextAnswers)
   }
 
+  function submitActivities() {
+    if (submitting) return
+    const { activityCount, awardCount } = activitiesSummary(activitiesValue)
+    if (activityCount === 0 && awardCount === 0) {
+      const ok = window.confirm(
+        'Continue without listing any activities? You can add them later from Essay Help.'
+      )
+      if (!ok) return
+    }
+    setError(null)
+    const nextAnswers = { ...answers, [question.id]: cleanActivitiesValue(activitiesValue) }
+    setAnswers(nextAnswers)
+    advance(nextAnswers)
+  }
+
   function goBack() {
     if (index === 0) {
       onExit()
@@ -208,6 +362,7 @@ export default function Quiz({
 
   useEffect(() => {
     function onKey(e) {
+      if (paywallOpen) return
       if (question?.type !== 'single') return
       const i = OPTION_KEYS.indexOf(e.key)
       if (i !== -1 && question?.options?.[i]) choose(question.options[i].id)
@@ -250,9 +405,22 @@ export default function Quiz({
 
   const progress = (index / Math.max(questions.length, 1)) * 100
   const qtype = question.type || 'single'
+  const wide = qtype === 'activities'
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-8">
+    <div className={`mx-auto flex min-h-screen flex-col px-6 py-8 ${wide ? 'max-w-3xl' : 'max-w-2xl'}`}>
+      <AiQuestionsPaywall
+        open={paywallOpen}
+        user={user}
+        busy={paywallBusy}
+        error={error}
+        onUnlock={unlockFromPaywall}
+        onContinue={() => {
+          setPaywallOpen(false)
+          submit(answers)
+        }}
+        onNavigateLegal={onNavigateLegal}
+      />
       <div className="flex items-center justify-between gap-4">
         <button
           onClick={goBack}
@@ -376,7 +544,29 @@ export default function Quiz({
             </button>
           </div>
         )}
+
+        {qtype === 'activities' && (
+          <div className="mt-6 space-y-6">
+            {question.placeholder && (
+              <p className="text-sm text-slate-400">{question.placeholder}</p>
+            )}
+            <ActivitiesEditor value={activitiesValue} onChange={setActivitiesValue} />
+            {error && <p className="text-sm text-rose-300">{error}</p>}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={submitActivities}
+                className="rounded-full bg-gradient-to-r from-sky-500 to-violet-500 px-8 py-3 text-sm font-bold text-white"
+              >
+                Continue
+              </button>
+              <span className="text-xs text-slate-500">
+                Saved to your PRO+ profile — editable later from Essay Help.
+              </span>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {qtype === 'single' && (
         <p className="mt-8 text-center text-xs text-slate-600">

@@ -38,7 +38,7 @@ export default function UpgradeModal({ open, onClose, user, attemptId, feature, 
         <h2 className="mt-3 text-2xl font-black text-white">Unlock PRO+ Features</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-400">
           {feature ||
-            'Upgrade to PRO+ to unlock your #1 match, deeper program rankings (#9+), and school-specific essay approach guides.'}
+            'Upgrade to PRO+ to unlock your #1 match, deeper program rankings (#9+), AI-tailored questions, and Essay Help with graded feedback.'}
         </p>
 
         <ul className="mt-5 space-y-2.5 text-sm text-slate-300">
@@ -51,7 +51,13 @@ export default function UpgradeModal({ open, onClose, user, attemptId, feature, 
           <li className="flex items-start gap-2.5">
             <span className="mt-0.5 text-amber-400 font-bold">✓</span>
             <div>
-              <strong className="text-white">PRO+ Essay Help</strong> — School-specific prompt themes, essay approaches, and profile hooks.
+              <strong className="text-white">AI-Tailored Questions</strong> — Follow-ups written from your answers, plus a guided extracurriculars &amp; awards profile.
+            </div>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 text-amber-400 font-bold">✓</span>
+            <div>
+              <strong className="text-white">PRO+ Essay Help</strong> — Paste any prompt and draft for a graded rubric with fixes written in your own voice, plus school-specific hooks.
             </div>
           </li>
           <li className="flex items-start gap-2.5">

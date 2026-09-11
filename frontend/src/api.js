@@ -90,10 +90,7 @@ export async function fetchAttempts() {
   return data.attempts || []
 }
 
-export async function fetchAttempt(attemptId) {
-  const res = await api(`/api/quiz/attempts/${attemptId}`)
-  const data = await parseJsonSafe(res)
-  if (!res.ok) throw new Error(data.error || 'Could not load attempt')
+function normalizeAttempt(data) {
   return {
     results: data.results,
     unlocked: data.unlocked,
@@ -101,4 +98,108 @@ export async function fetchAttempt(attemptId) {
     attemptId: data.attempt_id,
     profileSummary: data.profile_summary,
   }
+}
+
+export async function fetchAttempt(attemptId) {
+  const res = await api(`/api/quiz/attempts/${attemptId}`)
+  const data = await parseJsonSafe(res)
+  if (!res.ok) throw new Error(data.error || 'Could not load attempt')
+  return normalizeAttempt(data)
+}
+
+/** Error carrying the HTTP status + whether the server asked for an upgrade. */
+class ApiError extends Error {
+  constructor(message, { status, upgrade } = {}) {
+    super(message)
+    this.status = status
+    this.upgrade = Boolean(upgrade)
+  }
+}
+
+async function jsonOrThrow(res, fallbackMessage) {
+  const data = await parseJsonSafe(res)
+  if (!res.ok) {
+    throw new ApiError(data.error || fallbackMessage, { status: res.status, upgrade: data.upgrade })
+  }
+  return data
+}
+
+// ── PRO+ AI questions / profile ─────────────────────────────────────────────
+
+export async function fetchFollowupQuestions({ answers, attemptId } = {}) {
+  const res = await api('/api/premium/followup', {
+    method: 'POST',
+    body: JSON.stringify({
+      answers: answers || undefined,
+      attempt_id: attemptId || undefined,
+    }),
+  })
+  const data = await jsonOrThrow(res, 'Could not load AI questions')
+  return data.questions || []
+}
+
+export async function saveProfileAnswers(attemptId, answers) {
+  const res = await api('/api/premium/profile', {
+    method: 'POST',
+    body: JSON.stringify({ attempt_id: attemptId, answers }),
+  })
+  const data = await jsonOrThrow(res, 'Could not save your PRO+ profile')
+  return normalizeAttempt(data)
+}
+
+// ── Essays ──────────────────────────────────────────────────────────────────
+
+export async function gradeEssay({ attemptId, university, major, prompt, response, essayId } = {}) {
+  const res = await api('/api/essays/grade', {
+    method: 'POST',
+    body: JSON.stringify({
+      attempt_id: attemptId,
+      university,
+      major,
+      prompt,
+      response,
+      essay_id: essayId || undefined,
+    }),
+  })
+  return jsonOrThrow(res, 'Could not grade the essay')
+}
+
+export async function fetchEssays(attemptId) {
+  const q = attemptId ? `?attempt_id=${encodeURIComponent(attemptId)}` : ''
+  const res = await api(`/api/essays${q}`)
+  const data = await jsonOrThrow(res, 'Could not load essays')
+  return data.essays || []
+}
+
+export async function deleteEssay(essayId) {
+  const res = await api(`/api/essays/${essayId}`, { method: 'DELETE' })
+  return jsonOrThrow(res, 'Could not delete essay')
+}
+
+// ── Colleges + admissions tracker ───────────────────────────────────────────
+
+export async function searchColleges(q, { signal } = {}) {
+  const res = await api(`/api/colleges/search?q=${encodeURIComponent(q)}`, { signal })
+  const data = await jsonOrThrow(res, 'College search failed')
+  return { results: data.results || [], upstreamOk: data.upstream_ok !== false }
+}
+
+export async function fetchAdmissions() {
+  const res = await api('/api/admissions')
+  const data = await jsonOrThrow(res, 'Could not load admissions results')
+  return data.results || []
+}
+
+export async function addAdmission(entry) {
+  const res = await api('/api/admissions', {
+    method: 'POST',
+    body: JSON.stringify(entry),
+  })
+  const data = await jsonOrThrow(res, 'Could not save result')
+  return data.result
+}
+
+export async function deleteAdmission(id) {
+  const res = await api(`/api/admissions/${id}`, { method: 'DELETE' })
+  return jsonOrThrow(res, 'Could not delete result')
 }

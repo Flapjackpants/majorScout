@@ -219,6 +219,9 @@ def build_student_profile(answers, questions_by_id):
             # Preserve free-text / AI answers for downstream AI features.
             if isinstance(answer, str) and len(answer) > 1:
                 written[qid] = answer
+            elif isinstance(answer, (dict, list)) and str(qid).startswith("ai_"):
+                # Structured AI answers (e.g. ai_activities) are kept verbatim.
+                written[qid] = answer
             continue
 
         qtype = question.get("type", "single")

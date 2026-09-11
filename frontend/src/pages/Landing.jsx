@@ -76,6 +76,7 @@ export default function Landing({
   user,
   onRefreshUser,
   onMyResults,
+  onAdmissions,
   onOpenProFeatures,
   onNavigateLegal,
 }) {
@@ -104,6 +105,7 @@ export default function Landing({
         onHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         onRefreshUser={onRefreshUser}
         onMyResults={user ? onMyResults : undefined}
+        onAdmissions={user ? onAdmissions : undefined}
         onOpenProFeatures={onOpenProFeatures}
         rightSlot={
           <button

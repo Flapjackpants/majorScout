@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -15,9 +20,25 @@ from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 import stripe
 
-from ai import generate_essay_guidance, generate_followup_questions
+from ai import (
+    ACTIVITIES_QUESTION,
+    ESSAY_PROMPT_MAX,
+    ESSAY_RESPONSE_MAX,
+    generate_essay_guidance,
+    generate_followup_questions,
+    grade_essay,
+)
 from data_loader import load_programs
-from db import QuizAttempt, User, get_session, init_db
+from db import (
+    ADMISSION_DECISIONS,
+    ADMISSION_ROUNDS,
+    AdmissionResult,
+    Essay,
+    QuizAttempt,
+    User,
+    get_session,
+    init_db,
+)
 from matching import Matcher, build_student_profile
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -166,6 +187,24 @@ def login_required(fn):
         user = current_user()
         if user is None:
             return jsonify({"error": "Authentication required."}), 401
+        return fn(user, *args, **kwargs)
+
+    return wrapper
+
+
+def pro_required(fn):
+    """Sign-in AND account-level PRO+ (any unlocked attempt / admin)."""
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user = current_user()
+        if user is None:
+            return jsonify({"error": "Authentication required."}), 401
+        if not user.is_pro:
+            return (
+                jsonify({"error": "PRO+ is required for this feature.", "upgrade": True}),
+                403,
+            )
         return fn(user, *args, **kwargs)
 
     return wrapper
@@ -815,14 +854,43 @@ def billing_webhook():
 # ── Account AI ───────────────────────────────────────────────────────────────
 
 
+def _load_own_attempt(db, user: User, attempt_id) -> QuizAttempt | None:
+    try:
+        attempt = db.get(QuizAttempt, int(attempt_id))
+    except (TypeError, ValueError):
+        return None
+    if attempt is None or attempt.user_id != user.id:
+        return None
+    return attempt
+
+
 @app.post("/api/premium/followup")
-@login_required
+@pro_required
 def premium_followup(user):
-    """AI follow-ups require a signed-in account (not a paid unlock)."""
+    """AI follow-up questions (PRO+ only).
+
+    Accepts either raw ``answers`` (during the quiz) or an ``attempt_id`` (from
+    the Essay Help profile step) and always appends the structured
+    extracurriculars question.
+    """
     payload = request.get_json(silent=True) or {}
     answers = payload.get("answers") or {}
-    profile = build_student_profile(answers, QUESTIONS_BY_ID)
-    questions_payload = generate_followup_questions(profile, answers)
+    attempt_id = payload.get("attempt_id")
+    if attempt_id and not answers:
+        db = get_session()
+        try:
+            attempt = _load_own_attempt(db, user, attempt_id)
+            if attempt is None:
+                return jsonify({"error": "Attempt not found."}), 404
+            answers = attempt.answers
+        finally:
+            db.close()
+    if not isinstance(answers, dict):
+        return jsonify({"error": "answers must be an object."}), 400
+    # Do not feed prior AI answers back in as "prior answers" for generation.
+    base_answers = {k: v for k, v in answers.items() if not str(k).startswith("ai_")}
+    profile = build_student_profile(base_answers, QUESTIONS_BY_ID)
+    questions_payload = generate_followup_questions(profile, base_answers)
     mcq = []
     for q in questions_payload.get("mcq") or []:
         mcq.append(
@@ -847,7 +915,54 @@ def premium_followup(user):
                 "placeholder": q.get("placeholder", "Write a short answer…"),
             }
         )
-    return jsonify({"questions": mcq + written})
+    return jsonify({"questions": mcq + written + [dict(ACTIVITIES_QUESTION)]})
+
+
+@app.post("/api/premium/profile")
+@pro_required
+def premium_profile(user):
+    """Merge AI follow-up answers (ai_* keys, incl. ai_activities) into an attempt."""
+    payload = request.get_json(silent=True) or {}
+    attempt_id = payload.get("attempt_id")
+    incoming = payload.get("answers")
+    if not attempt_id:
+        return jsonify({"error": "attempt_id is required."}), 400
+    if not isinstance(incoming, dict):
+        return jsonify({"error": "answers must be an object."}), 400
+
+    ai_answers = {}
+    for k, v in incoming.items():
+        key = str(k)
+        if not key.startswith("ai_"):
+            continue
+        if isinstance(v, str):
+            v = v.strip()[:4000]
+            if not v:
+                continue
+        elif isinstance(v, dict):
+            # Structured activities payload — cap sizes defensively.
+            v = {
+                "activities": [a for a in (v.get("activities") or []) if isinstance(a, dict)][:40],
+                "awards": [a for a in (v.get("awards") or []) if isinstance(a, dict)][:40],
+            }
+        elif v is None:
+            continue
+        ai_answers[key] = v
+
+    db = get_session()
+    try:
+        attempt = _load_own_attempt(db, user, attempt_id)
+        if attempt is None:
+            return jsonify({"error": "Attempt not found."}), 404
+        merged = attempt.answers
+        merged.update(ai_answers)
+        attempt.answers = merged
+        attempt.profile = build_student_profile(merged, QUESTIONS_BY_ID)
+        db.commit()
+        db.refresh(attempt)
+        return jsonify(serialize_attempt_payload(user, attempt))
+    finally:
+        db.close()
 
 
 @app.post("/api/premium/essay-guidance")
@@ -860,8 +975,8 @@ def premium_essay(user):
 
     db = get_session()
     try:
-        attempt = db.get(QuizAttempt, int(attempt_id))
-        if attempt is None or attempt.user_id != user.id:
+        attempt = _load_own_attempt(db, user, attempt_id)
+        if attempt is None:
             return jsonify({"error": "Attempt not found."}), 404
         if not attempt_access_unlocked(user, attempt):
             return jsonify({"error": "Unlock this result set to view essay guidance.", "upgrade": True}), 403
@@ -873,8 +988,274 @@ def premium_essay(user):
 
     if len(unlocked_results) < 3:
         unlocked_results = MATCHER.match(profile, top_n=15)
-    guidance = generate_essay_guidance(profile, unlocked_results)
+    guidance = generate_essay_guidance(profile, unlocked_results, answers)
     return jsonify({"guidance": guidance})
+
+
+# ── Essays ───────────────────────────────────────────────────────────────────
+
+
+@app.post("/api/essays/grade")
+@login_required
+def essays_grade(user):
+    payload = request.get_json(silent=True) or {}
+    attempt_id = payload.get("attempt_id")
+    prompt = str(payload.get("prompt") or "").strip()
+    response_text = str(payload.get("response") or "").strip()
+    university = str(payload.get("university") or "").strip()[:255] or None
+    major = str(payload.get("major") or "").strip()[:255] or None
+    essay_id = payload.get("essay_id")
+
+    if not attempt_id:
+        return jsonify({"error": "attempt_id is required."}), 400
+    if not prompt:
+        return jsonify({"error": "Paste the essay prompt first."}), 400
+    if len(response_text.split()) < 20:
+        return jsonify({"error": "Write at least 20 words before grading."}), 400
+    if len(prompt) > ESSAY_PROMPT_MAX:
+        return jsonify({"error": f"Prompt is too long (max {ESSAY_PROMPT_MAX} characters)."}), 400
+    if len(response_text) > ESSAY_RESPONSE_MAX:
+        return jsonify({"error": f"Essay is too long (max {ESSAY_RESPONSE_MAX} characters)."}), 400
+
+    db = get_session()
+    try:
+        attempt = _load_own_attempt(db, user, attempt_id)
+        if attempt is None:
+            return jsonify({"error": "Attempt not found."}), 404
+        if not attempt_access_unlocked(user, attempt):
+            return jsonify({"error": "PRO+ is required for essay grading.", "upgrade": True}), 403
+        answers = attempt.answers
+        profile = attempt.profile or build_student_profile(answers, QUESTIONS_BY_ID)
+        program = None
+        for p in attempt.results or []:
+            if university and p.get("university") == university and (not major or p.get("major") == major):
+                program = p
+                break
+        if program is None:
+            program = {"university": university, "major": major}
+    finally:
+        db.close()
+
+    feedback = grade_essay(profile, answers, program, prompt, response_text)
+
+    db = get_session()
+    try:
+        essay = None
+        if essay_id:
+            try:
+                essay = db.get(Essay, int(essay_id))
+            except (TypeError, ValueError):
+                essay = None
+            if essay is not None and essay.user_id != user.id:
+                essay = None
+        if essay is None:
+            essay = Essay(user_id=user.id, attempt_id=int(attempt_id))
+            db.add(essay)
+        essay.university = university
+        essay.major = major
+        essay.prompt = prompt
+        essay.response = response_text
+        essay.feedback = feedback
+        db.commit()
+        db.refresh(essay)
+        return jsonify({"essay_id": essay.id, "feedback": feedback, "essay": essay.to_public()})
+    finally:
+        db.close()
+
+
+@app.get("/api/essays")
+@login_required
+def essays_list(user):
+    attempt_id = request.args.get("attempt_id")
+    db = get_session()
+    try:
+        q = db.query(Essay).filter(Essay.user_id == user.id)
+        if attempt_id:
+            try:
+                q = q.filter(Essay.attempt_id == int(attempt_id))
+            except (TypeError, ValueError):
+                return jsonify({"error": "attempt_id must be an integer."}), 400
+        rows = q.order_by(Essay.updated_at.desc()).limit(100).all()
+        return jsonify({"essays": [e.to_public() for e in rows]})
+    finally:
+        db.close()
+
+
+@app.delete("/api/essays/<int:essay_id>")
+@login_required
+def essays_delete(user, essay_id: int):
+    db = get_session()
+    try:
+        essay = db.get(Essay, essay_id)
+        if essay is None or essay.user_id != user.id:
+            return jsonify({"error": "Essay not found."}), 404
+        db.delete(essay)
+        db.commit()
+        return jsonify({"ok": True})
+    finally:
+        db.close()
+
+
+# ── College lookup (Hipolabs proxy + local catalog) ──────────────────────────
+
+HIPOLABS_URL = "http://universities.hipolabs.com/search"
+_COLLEGE_CACHE: dict[str, tuple[float, list, bool]] = {}
+_COLLEGE_CACHE_LOCK = threading.Lock()
+_COLLEGE_CACHE_TTL = 60 * 60 * 6
+_COLLEGE_CACHE_MAX = 512
+LOCAL_UNIVERSITIES = sorted({p["university"] for p in PROGRAMS if p.get("university")})
+
+
+def _hipolabs_search(query: str) -> tuple[list[dict], bool]:
+    """Return ([{name, country, domain}], upstream_ok)."""
+    url = f"{HIPOLABS_URL}?{urllib.parse.urlencode({'name': query})}"
+    req = urllib.request.Request(url, headers={"User-Agent": "MajorScout/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        return [], False
+    out = []
+    for item in data if isinstance(data, list) else []:
+        name = (item.get("name") or "").strip()
+        if not name:
+            continue
+        domains = item.get("domains") or []
+        out.append(
+            {
+                "name": name,
+                "country": (item.get("country") or "").strip() or None,
+                "domain": domains[0] if domains else None,
+                "source": "hipolabs",
+            }
+        )
+    return out, True
+
+
+@app.get("/api/colleges/search")
+def colleges_search():
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"results": [], "upstream_ok": True})
+    q = q[:80]
+    key = q.lower()
+    now = time.time()
+    with _COLLEGE_CACHE_LOCK:
+        cached = _COLLEGE_CACHE.get(key)
+    if cached and now - cached[0] < _COLLEGE_CACHE_TTL:
+        return jsonify({"results": cached[1], "upstream_ok": cached[2], "cached": True})
+
+    remote, upstream_ok = _hipolabs_search(q)
+    local = [
+        {"name": u, "country": "United States", "domain": None, "source": "majorscout"}
+        for u in LOCAL_UNIVERSITIES
+        if key in u.lower()
+    ]
+
+    merged: list[dict] = []
+    seen = set()
+    # Local catalog first so schools we have program data for float to the top.
+    for item in local + remote:
+        norm = item["name"].lower()
+        if norm in seen:
+            continue
+        seen.add(norm)
+        merged.append(item)
+
+    def _rank(item):
+        n = item["name"].lower()
+        return (0 if n.startswith(key) else 1, 0 if item["source"] == "majorscout" else 1, len(n))
+
+    merged.sort(key=_rank)
+    results = merged[:15]
+
+    if upstream_ok:
+        with _COLLEGE_CACHE_LOCK:
+            if len(_COLLEGE_CACHE) >= _COLLEGE_CACHE_MAX:
+                oldest = min(_COLLEGE_CACHE.items(), key=lambda kv: kv[1][0])[0]
+                _COLLEGE_CACHE.pop(oldest, None)
+            _COLLEGE_CACHE[key] = (now, results, upstream_ok)
+    return jsonify({"results": results, "upstream_ok": upstream_ok})
+
+
+# ── Admissions tracker ───────────────────────────────────────────────────────
+
+
+@app.get("/api/admissions")
+@login_required
+def admissions_list(user):
+    db = get_session()
+    try:
+        rows = (
+            db.query(AdmissionResult)
+            .filter(AdmissionResult.user_id == user.id)
+            .order_by(AdmissionResult.created_at.desc())
+            .all()
+        )
+        return jsonify({"results": [r.to_public() for r in rows]})
+    finally:
+        db.close()
+
+
+@app.post("/api/admissions")
+@login_required
+def admissions_create(user):
+    payload = request.get_json(silent=True) or {}
+    college_name = str(payload.get("college_name") or "").strip()[:255]
+    round_ = str(payload.get("round") or "").strip().upper()
+    decision = str(payload.get("decision") or "").strip().lower()
+    if not college_name:
+        return jsonify({"error": "college_name is required."}), 400
+    if round_ not in ADMISSION_ROUNDS:
+        return jsonify({"error": f"round must be one of {', '.join(ADMISSION_ROUNDS)}."}), 400
+    if decision not in ADMISSION_DECISIONS:
+        return jsonify({"error": f"decision must be one of {', '.join(ADMISSION_DECISIONS)}."}), 400
+
+    year = payload.get("application_year")
+    if year in ("", None):
+        year = None
+    else:
+        try:
+            year = int(year)
+        except (TypeError, ValueError):
+            return jsonify({"error": "application_year must be a year."}), 400
+        if year < 2000 or year > 2100:
+            return jsonify({"error": "application_year is out of range."}), 400
+
+    row = AdmissionResult(
+        user_id=user.id,
+        college_name=college_name,
+        college_country=(str(payload.get("college_country") or "").strip()[:128] or None),
+        college_domain=(str(payload.get("college_domain") or "").strip()[:255] or None),
+        college_verified=bool(payload.get("college_verified")),
+        round=round_,
+        decision=decision,
+        intended_major=(str(payload.get("intended_major") or "").strip()[:255] or None),
+        application_year=year,
+    )
+    db = get_session()
+    try:
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return jsonify({"result": row.to_public()}), 201
+    finally:
+        db.close()
+
+
+@app.delete("/api/admissions/<int:result_id>")
+@login_required
+def admissions_delete(user, result_id: int):
+    db = get_session()
+    try:
+        row = db.get(AdmissionResult, result_id)
+        if row is None or row.user_id != user.id:
+            return jsonify({"error": "Result not found."}), 404
+        db.delete(row)
+        db.commit()
+        return jsonify({"ok": True})
+    finally:
+        db.close()
 
 
 @app.errorhandler(404)

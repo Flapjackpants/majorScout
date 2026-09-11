@@ -88,7 +88,7 @@ function LockedCard({ rank, matchPercent, onUnlock, featured }) {
   )
 }
 
-function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) {
+function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock, onEssayHelp }) {
   if (program.locked) {
     return (
       <LockedCard
@@ -198,13 +198,23 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) 
         </details>
       )}
 
-      {!unlocked && featured === false && rank <= 8 && (
+      {unlocked ? (
         <button
-          onClick={onUnlock}
-          className="mt-4 flex items-center gap-1 text-xs font-bold text-amber-300 underline-offset-2 hover:underline"
+          onClick={() => onEssayHelp?.(program)}
+          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-5 py-2.5 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition hover:scale-[1.02] hover:shadow-amber-400/30"
         >
-          <span>⚡</span> Unlock PRO+ essay approaches for this school
+          <span>📝</span> Essay help for {program.university}
         </button>
+      ) : (
+        !featured &&
+        rank <= 8 && (
+          <button
+            onClick={onUnlock}
+            className="mt-4 flex items-center gap-1 text-xs font-bold text-amber-300 underline-offset-2 hover:underline"
+          >
+            <span>⚡</span> Unlock PRO+ essay help &amp; grading for this school
+          </button>
+        )
       )}
     </div>
   )
@@ -222,6 +232,8 @@ export default function Results({
   onRetake,
   onHome,
   onMyResults,
+  onEssayHelp,
+  onAdmissions,
   onNavigateLegal,
 }) {
   const results = payload?.results || []
@@ -286,7 +298,7 @@ export default function Results({
         onClose={() => setUpgradeOpen(false)}
         user={user}
         attemptId={attemptId}
-        feature="Upgrade to PRO+ to unlock your #1 match, deeper rankings (#9+), and school-specific essay approach guides."
+        feature="Upgrade to PRO+ to unlock your #1 match, deeper rankings (#9+), AI-tailored questions, and Essay Help with graded feedback for every school."
         onNavigateLegal={onNavigateLegal}
       />
 
@@ -322,6 +334,14 @@ export default function Results({
                 </div>
               )}
             </div>
+          )}
+          {user && onAdmissions && (
+            <button
+              onClick={onAdmissions}
+              className="hidden rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-sky-400/50 hover:text-white sm:inline"
+            >
+              Admissions tracker
+            </button>
           )}
           {user && onMyResults && (
             <button
@@ -394,6 +414,7 @@ export default function Results({
           guidance={guidance}
           unlocked={unlocked}
           onUnlock={() => setUpgradeOpen(true)}
+          onEssayHelp={onEssayHelp}
         />
       </div>
 
@@ -406,6 +427,7 @@ export default function Results({
             guidance={guidance}
             unlocked={unlocked}
             onUnlock={() => setUpgradeOpen(true)}
+            onEssayHelp={onEssayHelp}
           />
         ))}
       </div>
@@ -422,6 +444,7 @@ export default function Results({
                 guidance={guidance}
                 unlocked={unlocked}
                 onUnlock={() => setUpgradeOpen(true)}
+                onEssayHelp={onEssayHelp}
               />
             ))}
           </div>

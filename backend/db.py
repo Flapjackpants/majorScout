@@ -112,6 +112,92 @@ class QuizAttempt(Base):
         self.results_json = json.dumps(value) if value is not None else None
 
 
+class Essay(Base):
+    """A student's essay draft for a specific program plus the AI feedback."""
+
+    __tablename__ = "essays"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    attempt_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quiz_attempts.id"), nullable=True, index=True
+    )
+    university: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    major: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    prompt: Mapped[str] = mapped_column(Text, default="")
+    response: Mapped[str] = mapped_column(Text, default="")
+    feedback_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    @property
+    def feedback(self) -> dict | None:
+        if not self.feedback_json:
+            return None
+        return json.loads(self.feedback_json)
+
+    @feedback.setter
+    def feedback(self, value: dict | None) -> None:
+        self.feedback_json = json.dumps(value) if value is not None else None
+
+    def to_public(self) -> dict:
+        return {
+            "id": self.id,
+            "attempt_id": self.attempt_id,
+            "university": self.university,
+            "major": self.major,
+            "prompt": self.prompt,
+            "response": self.response,
+            "feedback": self.feedback,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+ADMISSION_ROUNDS = ("EA", "ED", "RD")
+ADMISSION_DECISIONS = ("accepted", "waitlisted", "denied")
+
+
+class AdmissionResult(Base):
+    """Self-reported admissions outcome; collected for future model refinement."""
+
+    __tablename__ = "admission_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    college_name: Mapped[str] = mapped_column(String(255))
+    college_country: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    college_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    college_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    round: Mapped[str] = mapped_column(String(8))
+    decision: Mapped[str] = mapped_column(String(16))
+    intended_major: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    application_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_public(self) -> dict:
+        return {
+            "id": self.id,
+            "college_name": self.college_name,
+            "college_country": self.college_country,
+            "college_domain": self.college_domain,
+            "college_verified": bool(self.college_verified),
+            "round": self.round,
+            "decision": self.decision,
+            "intended_major": self.intended_major,
+            "application_year": self.application_year,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 def _build_engine():
     import sys
 
