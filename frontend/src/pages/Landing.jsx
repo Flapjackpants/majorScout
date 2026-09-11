@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import SiteHeader from '../components/SiteHeader.jsx'
+import logo from '../assets/logo.png'
 
 function StatCard({ value, label }) {
   return (
@@ -197,8 +198,11 @@ export default function Landing({ onStart, user, onRefreshUser, onMyResults }) {
         </div>
       </main>
 
-      <footer className="border-t border-white/5 py-8 text-center text-sm text-slate-600">
-        MajorScout — matching students with programs using real admissions data.
+      <footer className="border-t border-white/5 py-8 text-center text-sm text-slate-500">
+        <div className="flex items-center justify-center gap-2">
+          <img src={logo} alt="" className="h-5 w-5 shrink-0 rounded-full object-contain opacity-75" />
+          <span>MajorScout — matching students with programs using real admissions data.</span>
+        </div>
       </footer>
     </div>
   )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, startGoogleLogin } from '../api.js'
 import UpgradeModal from '../components/UpgradeModal.jsx'
+import logo from '../assets/logo.png'
 
 const RING_RADIUS = 26
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
@@ -266,10 +267,12 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults }
       />
 
       <header className="flex items-center justify-between">
-        <button onClick={onHome} className="flex items-center gap-2 text-lg font-bold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-violet-500 text-sm font-black text-white">
-            M
-          </span>
+        <button onClick={onHome} className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
+          <img
+            src={logo}
+            alt="MajorScout logo"
+            className="h-9 w-9 shrink-0 rounded-full object-contain"
+          />
           MajorScout
         </button>
         <div className="flex items-center gap-2">

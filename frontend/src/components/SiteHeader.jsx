@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { logout, startGoogleLogin } from '../api.js'
+import logo from '../assets/logo.png'
 
 function UserAvatar({ user, onClick }) {
   const [imgFailed, setImgFailed] = useState(false)
@@ -66,10 +67,12 @@ export default function SiteHeader({
   return (
     <>
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <button onClick={onHome} className="flex items-center gap-2 text-lg font-bold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-violet-500 text-sm font-black text-white">
-            M
-          </span>
+        <button onClick={onHome} className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
+          <img
+            src={logo}
+            alt="MajorScout logo"
+            className="h-9 w-9 shrink-0 rounded-full object-contain"
+          />
           MajorScout
         </button>
         <div className="flex items-center gap-3">
