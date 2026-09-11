@@ -1,71 +1,99 @@
+import { useState } from 'react'
 import { startCheckout, startGoogleLogin } from '../api.js'
 
 export default function UpgradeModal({ open, onClose, user, attemptId, feature, onNavigateLegal }) {
+  const [loading, setLoading] = useState(false)
   if (!open) return null
 
   async function upgrade() {
     try {
+      setLoading(true)
       if (!user) {
         startGoogleLogin()
-        return
-      }
-      if (!attemptId) {
-        alert('Sign in and save your quiz results first, then unlock this result set.')
         return
       }
       await startCheckout(attemptId)
     } catch (err) {
       alert(err.message || 'Could not start checkout.')
+      setLoading(false)
     }
   }
 
-  let cta = 'Unlock with Stripe'
-  if (!user) cta = 'Sign in to unlock'
-  else if (!attemptId) cta = 'Save results to unlock'
+  let cta = 'Unlock PRO+ with Stripe'
+  if (loading) cta = 'Starting checkout…'
+  else if (!user) cta = 'Sign in for PRO+'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
-      <div className="animate-fade-up w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
-        <h2 className="text-xl font-bold text-white">Unlock this result set</h2>
+      <div className="animate-fade-up w-full max-w-md rounded-2xl border border-amber-400/30 bg-slate-900 p-6 shadow-2xl shadow-amber-500/10">
+        <div className="flex items-center justify-between">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
+            <span>⚡</span> PRO+
+          </div>
+          <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+            One-time unlock
+          </span>
+        </div>
+
+        <h2 className="mt-3 text-2xl font-black text-white">Unlock PRO+ Features</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-400">
           {feature ||
-            'One-time unlock for this quiz: your #1 match, deeper rankings (#9+), and essay approaches for every school.'}
+            'Upgrade to PRO+ to unlock your #1 match, deeper program rankings (#9+), and school-specific essay approach guides.'}
         </p>
-        <ul className="mt-4 space-y-2 text-sm text-slate-300">
-          <li className="flex gap-2">
-            <span className="text-sky-400">✓</span> Best-fit #1 plus deeper #9+ matches
+
+        <ul className="mt-5 space-y-2.5 text-sm text-slate-300">
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 text-amber-400 font-bold">✓</span>
+            <div>
+              <strong className="text-white">#1 Best-Fit Match</strong> — Reveal your highest-scoring program and curriculum fit.
+            </div>
           </li>
-          <li className="flex gap-2">
-            <span className="text-sky-400">✓</span> Essay approach guides for each school
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 text-amber-400 font-bold">✓</span>
+            <div>
+              <strong className="text-white">PRO+ Essay Help</strong> — School-specific prompt themes, essay approaches, and profile hooks.
+            </div>
           </li>
-          <li className="flex gap-2">
-            <span className="text-sky-400">✓</span> Tied to your account — reopen anytime
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 text-amber-400 font-bold">✓</span>
+            <div>
+              <strong className="text-white">Deeper Ranks (#9+)</strong> — Full extended list of matching colleges and programs.
+            </div>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="mt-0.5 text-amber-400 font-bold">✓</span>
+            <div>
+              <strong className="text-white">PRO+ Account Badge</strong> — Displayed next to your profile picture across MajorScout.
+            </div>
           </li>
         </ul>
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
           <button
             onClick={upgrade}
-            className="flex-1 rounded-full bg-gradient-to-r from-sky-500 to-violet-500 px-5 py-3 text-sm font-bold text-white"
+            disabled={loading}
+            className="flex-1 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition hover:scale-[1.02] hover:shadow-amber-400/30 disabled:opacity-60"
           >
             {cta}
           </button>
           <button
             onClick={onClose}
-            className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-slate-300"
+            disabled={loading}
+            className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/5 disabled:opacity-60"
           >
             Not now
           </button>
         </div>
 
         <p className="mt-4 text-center text-[11px] text-slate-500">
-          By unlocking, you agree to our{' '}
+          By upgrading to PRO+, you agree to our{' '}
           <button
             type="button"
             onClick={() => {
               onClose()
               onNavigateLegal?.('terms')
             }}
-            className="text-slate-400 underline hover:text-sky-300"
+            className="text-slate-400 underline hover:text-amber-300"
           >
             Terms of Service
           </button>{' '}
@@ -76,7 +104,7 @@ export default function UpgradeModal({ open, onClose, user, attemptId, feature, 
               onClose()
               onNavigateLegal?.('privacy')
             }}
-            className="text-slate-400 underline hover:text-sky-300"
+            className="text-slate-400 underline hover:text-amber-300"
           >
             Privacy Policy
           </button>

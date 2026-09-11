@@ -130,7 +130,7 @@ function PrivacyPolicy() {
         <p className="mt-2 text-slate-300">
           MajorScout (&ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) respects your privacy and is committed
           to protecting personal data. This Privacy Policy outlines what information we collect when you visit
-          our website (majorscout.com), take our major-matching quiz, create an account, or unlock premium insights,
+          our website (majorscout.com), take our major-matching quiz, create an account, or unlock PRO+ insights,
           and how that information is used, safeguarded, and shared.
         </p>
       </section>
@@ -152,7 +152,7 @@ function PrivacyPolicy() {
             work preferences, and answers to multiple-choice and written follow-up questions.
           </li>
           <li>
-            <strong className="text-white">Payment Information:</strong> Paid unlocks are processed directly by
+            <strong className="text-white">Payment Information:</strong> PRO+ unlocks are processed directly by
             our payment processor, <strong className="text-white">Stripe</strong>. MajorScout does not collect,
             store, or process your credit card numbers or banking details. We receive only transaction identifiers,
             timestamp, and payment status from Stripe.
@@ -351,15 +351,14 @@ function TermsOfService() {
       </section>
 
       <section>
-        <h2 className="text-xl font-bold text-white">6. Fees, Unlocks, and Refunds</h2>
+        <h2 className="text-xl font-bold text-white">6. PRO+ Access, Fees, and Refunds</h2>
         <p className="mt-2 text-slate-300">
-          The core quiz and a preview of program matches are provided free of charge. Users may optionally purchase
-          a one-time digital unlock for a specific quiz attempt to view their #1 match, full rankings, and detailed
-          essay guidance.
+          The core quiz and a preview of program matches are provided free of charge. Users may optionally upgrade to
+          PRO+ to view their #1 match, full rankings, and detailed essay guidance.
         </p>
         <ul className="mt-2 list-disc space-y-2 pl-6 text-slate-300">
           <li>
-            <strong className="text-white">Immediate Digital Delivery:</strong> Unlocked results and essay guidance
+            <strong className="text-white">Immediate Digital Delivery:</strong> PRO+ results and essay guidance
             are made accessible in your account immediately upon successful payment confirmation.
           </li>
           <li>
@@ -367,8 +366,8 @@ function TermsOfService() {
             to provide accurate and valid payment information.
           </li>
           <li>
-            <strong className="text-white">Refund Policy:</strong> Because unlocked results are delivered immediately
-            as digital content, unlock fees are generally non-refundable once unlocked. If you experience technical
+            <strong className="text-white">Refund Policy:</strong> Because PRO+ results are delivered immediately
+            as digital content, PRO+ unlock fees are generally non-refundable once unlocked. If you experience technical
             difficulties or an error processing your unlock, please reach out to{' '}
             <a href="mailto:support@majorscout.com" className="text-sky-400 underline hover:text-sky-300">
               support@majorscout.com

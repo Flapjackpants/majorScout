@@ -60,28 +60,28 @@ function LockedCard({ rank, matchPercent, onUnlock, featured }) {
     >
       <div className="pointer-events-none absolute inset-0 backdrop-blur-[2px]" />
       <div className="relative">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-300">
-          {rank === 1 ? 'Best match — Locked' : `Match #${rank} — Locked`}
+        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
+          <span>⚡</span> {rank === 1 ? 'PRO+ #1 Match — Locked' : `PRO+ Match #${rank} — Locked`}
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-slate-500">#{rank}</div>
             <h3 className={`mt-1 font-bold text-slate-400 ${featured ? 'text-2xl' : 'text-lg'}`}>
-              Hidden until you unlock
+              Hidden until you unlock PRO+
             </h3>
             <p className="mt-2 text-sm text-slate-500">
               {rank === 1
-                ? 'Your strongest overall fit unlocks with a one-time purchase for this result set.'
-                : 'Deeper fits beyond the free mid-range unlock with this result set.'}
+                ? 'Your strongest overall fit unlocks with PRO+, including school-specific essay approaches and profile hooks.'
+                : 'Deeper fits beyond the free mid-range unlock with PRO+.'}
             </p>
           </div>
           <MatchRing percent={matchPercent} size={featured ? 'lg' : 'md'} />
         </div>
         <button
           onClick={onUnlock}
-          className="mt-5 rounded-full bg-gradient-to-r from-amber-500 to-violet-500 px-6 py-2.5 text-sm font-bold text-white"
+          className="mt-5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-2.5 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition hover:scale-105 hover:shadow-amber-400/30"
         >
-          Unlock this result set
+          Unlock PRO+ Features
         </button>
       </div>
     </div>
@@ -112,8 +112,8 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) 
       style={{ animationDelay: `${Math.min(rank, 8) * 0.07}s` }}
     >
       {featured && (
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-sky-400/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-sky-300">
-          Best match
+        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
+          <span>⚡</span> PRO+ Best Match
         </div>
       )}
       <div className="flex items-start justify-between gap-4">
@@ -160,8 +160,9 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) 
       )}
 
       {unlocked && schoolGuidance && (
-        <details className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/5 p-4">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-widest text-amber-300">
+        <details className="mt-5 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4" open>
+          <summary className="cursor-pointer text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-2">
+            <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] text-amber-200">PRO+ ESSAY HELP</span>
             Essay approach for {program.university}
           </summary>
           <div className="mt-3 space-y-3 text-sm text-slate-300">
@@ -200,9 +201,9 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) 
       {!unlocked && featured === false && rank <= 8 && (
         <button
           onClick={onUnlock}
-          className="mt-4 text-xs font-semibold text-amber-300/80 underline-offset-2 hover:underline"
+          className="mt-4 flex items-center gap-1 text-xs font-bold text-amber-300 underline-offset-2 hover:underline"
         >
-          Unlock essay approaches for this school
+          <span>⚡</span> Unlock PRO+ essay approaches for this school
         </button>
       )}
     </div>
@@ -212,7 +213,7 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock }) 
 export default function Results({ payload, user, onRetake, onHome, onMyResults, onNavigateLegal }) {
   const results = payload?.results || []
   const attemptId = payload?.attemptId
-  const unlocked = Boolean(payload?.unlocked || user?.is_admin)
+  const unlocked = Boolean(payload?.unlocked || user?.is_admin || user?.is_pro)
 
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [guidance, setGuidance] = useState(null)
@@ -264,7 +265,7 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults, 
         onClose={() => setUpgradeOpen(false)}
         user={user}
         attemptId={attemptId}
-        feature="One-time unlock for this quiz: your #1 match, deeper rankings (#9+), and essay approaches."
+        feature="Upgrade to PRO+ to unlock your #1 match, deeper rankings (#9+), and school-specific essay approach guides."
         onNavigateLegal={onNavigateLegal}
       />
 
@@ -277,16 +278,34 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults, 
           />
           MajorScout
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {unlocked && (
-            <span className="hidden rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300 sm:inline">
-              Unlocked
+            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
+              <span>⚡</span> PRO+
             </span>
+          )}
+          {user && (
+            <div className="flex items-center gap-2">
+              {user.picture ? (
+                <img
+                  src={user.picture}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className={`h-8 w-8 rounded-full object-cover border border-white/10 ${user.is_pro ? 'ring-2 ring-amber-400/80' : ''}`}
+                />
+              ) : (
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold ${user.is_pro ? 'ring-2 ring-amber-400/80' : ''}`}
+                >
+                  {(user.name || user.email || '?')[0].toUpperCase()}
+                </div>
+              )}
+            </div>
           )}
           {user && onMyResults && (
             <button
               onClick={onMyResults}
-              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200"
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-sky-400/50 hover:text-white"
             >
               My results
             </button>
@@ -318,19 +337,38 @@ export default function Results({ payload, user, onRetake, onHome, onMyResults, 
       <div className="animate-fade-up mt-12 text-center">
         <p className="text-xs font-bold uppercase tracking-widest text-sky-300">Your results</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-          {unlocked ? 'Your full program matches' : 'Your free program matches'}
+          {unlocked ? (
+            <span className="bg-gradient-to-r from-white via-slate-100 to-amber-200 bg-clip-text text-transparent">
+              Your PRO+ Full Program Matches
+            </span>
+          ) : (
+            'Your free program matches'
+          )}
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-slate-400">
           Ranked from nearly 2,000 programs using your interests, academics, and preferences.
           {!unlocked &&
-            ' Free results show ranks #2–#8. Sign in and unlock this result set for #1, #9+, and essay guides.'}
+            ' Free results show ranks #2–#8. Upgrade to PRO+ to unlock your #1 match, deeper rankings (#9+), and school-specific essay guides.'}
         </p>
+        {unlocked && (
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={() => {
+                const el = document.getElementById('essay-guidance-anchor')
+                el?.scrollIntoView({ behavior: 'smooth' })
+              }}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-amber-400/25 transition hover:scale-105"
+            >
+              <span>📝</span> Jump to PRO+ Essay Help & Guides
+            </button>
+          </div>
+        )}
         {loadingGuidance && (
-          <p className="mt-2 text-sm text-amber-300/80">Writing essay approaches for your schools…</p>
+          <p className="mt-3 text-sm text-amber-300/80 animate-pulse">Writing PRO+ essay approaches for your schools…</p>
         )}
       </div>
 
-      <div className="mt-10">
+      <div id="essay-guidance-anchor" className="mt-10">
         <ProgramCard
           program={top}
           rank={top.rank}

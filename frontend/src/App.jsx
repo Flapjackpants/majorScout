@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, fetchAttempt, fetchMe } from './api.js'
+import { api, fetchAttempt, fetchAttempts, fetchMe, verifyCheckoutSession } from './api.js'
 import Landing from './pages/Landing.jsx'
 import CategoryHub from './pages/CategoryHub.jsx'
 import Quiz from './pages/Quiz.jsx'
 import Results from './pages/Results.jsx'
 import History from './pages/History.jsx'
 import Legal from './pages/Legal.jsx'
+import UpgradeModal from './components/UpgradeModal.jsx'
 
 function getInitialRoute() {
   const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/'
@@ -25,6 +26,9 @@ export default function App() {
   const [questionCounts, setQuestionCounts] = useState({})
   const [startSectionId, setStartSectionId] = useState(null)
   const [resultsPayload, setResultsPayload] = useState(null)
+  const [billingNotice, setBillingNotice] = useState(null)
+  const [proCelebration, setProCelebration] = useState(null)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
 
   const refreshUser = useCallback(() => {
     return fetchMe().then(setUser).catch(() => setUser(null))
@@ -49,31 +53,123 @@ export default function App() {
     const params = new URLSearchParams(window.location.search)
     const authOk = params.get('auth') === 'success'
     const authErr = params.get('auth') === 'error'
-    const billingOk = params.get('billing') === 'success'
+    const billingParam = params.get('billing') // 'success', 'cancel', 'error'
+    const sessionIdParam = params.get('session_id')
     const attemptIdParam = params.get('attempt_id')
-    if (!authOk && !billingOk && !authErr) return
+
+    if (!authOk && !authErr && !billingParam && !sessionIdParam) return
 
     window.history.replaceState({}, '', window.location.pathname)
-    if (authErr) return
 
-    refreshUser().then(async () => {
-      if (billingOk && attemptIdParam) {
-        try {
-          let payload = await fetchAttempt(attemptIdParam)
-          // Webhook may lag briefly after Checkout redirect.
-          for (let i = 0; i < 5 && !payload.unlocked; i++) {
-            await new Promise((r) => setTimeout(r, 800))
-            payload = await fetchAttempt(attemptIdParam)
-          }
-          setResultsPayload(payload)
-          setView('results')
-        } catch {
-          /* ignore — user can open from history */
-        }
-        return
+    if (authErr) {
+      setBillingNotice({
+        type: 'error',
+        title: 'Sign-in Failed',
+        message: 'Could not complete authentication. Please try again.',
+      })
+      return
+    }
+
+    if (billingParam === 'cancel') {
+      if (sessionIdParam) {
+        verifyCheckoutSession({ sessionId: sessionIdParam, attemptId: attemptIdParam })
+          .then((res) => {
+            setBillingNotice({
+              type: 'error',
+              title: 'Payment Cancelled',
+              message: res.message || 'Payment checkout was cancelled before completion.',
+              details: res.error,
+              attemptId: attemptIdParam,
+            })
+          })
+          .catch(() => {
+            setBillingNotice({
+              type: 'error',
+              title: 'Payment Cancelled',
+              message: 'Checkout was cancelled. Your card was not charged and PRO+ was not activated.',
+              attemptId: attemptIdParam,
+            })
+          })
+      } else {
+        setBillingNotice({
+          type: 'error',
+          title: 'Payment Cancelled',
+          message: 'Checkout was cancelled. Your card was not charged and PRO+ was not activated.',
+          attemptId: attemptIdParam,
+        })
       }
+      return
+    }
 
-      if (!authOk) return
+    if (billingParam === 'error') {
+      setBillingNotice({
+        type: 'error',
+        title: 'Payment Error',
+        message: 'An error occurred during Stripe checkout. Please try again.',
+        attemptId: attemptIdParam,
+      })
+      return
+    }
+
+    if (billingParam === 'success' || sessionIdParam) {
+      verifyCheckoutSession({ sessionId: sessionIdParam, attemptId: attemptIdParam })
+        .then(async (res) => {
+          await refreshUser()
+          if (res.success || res.status === 'paid') {
+            const targetId = res.attempt_id || attemptIdParam
+            let payload = res.attempt
+            if (!payload && targetId) {
+              try {
+                payload = await fetchAttempt(targetId)
+              } catch {
+                /* ignore */
+              }
+            }
+            if (payload) {
+              setResultsPayload(payload)
+              setView('results')
+            }
+            setBillingNotice({
+              type: 'success',
+              title: 'PRO+ Activated',
+              message: 'Your payment was successful! All PRO+ features are unlocked.',
+              attemptId: targetId,
+            })
+            setProCelebration({
+              open: true,
+              attemptId: targetId,
+            })
+          } else if (res.status === 'processing') {
+            setBillingNotice({
+              type: 'info',
+              title: 'Payment Processing',
+              message: res.message || 'Your payment is being processed by Stripe/Link. PRO+ will unlock as soon as it confirms.',
+              details: res.error,
+              attemptId: attemptIdParam,
+            })
+          } else {
+            setBillingNotice({
+              type: 'error',
+              title: 'Payment Unsuccessful',
+              message: res.message || 'Payment could not be completed.',
+              details: res.error || (res.status ? `Status: ${res.status}` : undefined),
+              attemptId: attemptIdParam,
+            })
+          }
+        })
+        .catch((err) => {
+          setBillingNotice({
+            type: 'error',
+            title: 'Payment Verification Error',
+            message: err.message || 'Could not verify payment status with Stripe.',
+            attemptId: attemptIdParam,
+          })
+        })
+      return
+    }
+
+    if (!authOk) return
+    refreshUser().then(async () => {
       const raw = sessionStorage.getItem('pendingQuiz')
       if (!raw) return
       try {
@@ -121,6 +217,24 @@ export default function App() {
     }
   }
 
+  async function openProFeatures(preferredId) {
+    const targetId = preferredId || resultsPayload?.attemptId
+    if (targetId) {
+      await openAttempt(targetId)
+      return
+    }
+    try {
+      const attempts = await fetchAttempts()
+      if (attempts && attempts.length > 0) {
+        await openAttempt(attempts[0].id)
+      } else {
+        startQuizFlow()
+      }
+    } catch {
+      startQuizFlow()
+    }
+  }
+
   function goHistory() {
     setView('history')
   }
@@ -150,11 +264,134 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      {billingNotice && (
+        <div
+          className={`border-b px-4 py-3 text-sm transition ${
+            billingNotice.type === 'success'
+              ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
+              : billingNotice.type === 'error'
+              ? 'border-rose-500/30 bg-rose-950/70 text-rose-200'
+              : 'border-sky-500/30 bg-sky-950/70 text-sky-200'
+          }`}
+        >
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">
+                {billingNotice.type === 'success' ? '⚡' : billingNotice.type === 'error' ? '⚠️' : 'ℹ️'}
+              </span>
+              <div>
+                <span className="font-bold">{billingNotice.title}: </span>
+                <span>{billingNotice.message}</span>
+                {billingNotice.details && (
+                  <p className="mt-0.5 text-xs font-mono text-rose-300 opacity-90">{billingNotice.details}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {billingNotice.type === 'success' && (
+                <button
+                  onClick={() => openProFeatures(billingNotice.attemptId)}
+                  className="rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 px-3.5 py-1 text-xs font-black uppercase tracking-wide text-slate-950 shadow-sm transition hover:scale-105"
+                >
+                  ✨ View PRO+ Features & Essay Help
+                </button>
+              )}
+              {billingNotice.type === 'error' && (
+                <button
+                  onClick={() => setUpgradeOpen(true)}
+                  className="rounded-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-xs font-bold text-rose-100 hover:bg-rose-500/30"
+                >
+                  Try Again
+                </button>
+              )}
+              <button
+                onClick={() => setBillingNotice(null)}
+                className="text-xs font-bold opacity-70 hover:opacity-100"
+                title="Dismiss notice"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {proCelebration?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-md">
+          <div className="animate-fade-up w-full max-w-lg rounded-3xl border border-amber-400/40 bg-gradient-to-b from-slate-900 to-slate-950 p-7 text-center shadow-2xl shadow-amber-500/20">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 text-3xl shadow-lg shadow-amber-400/30">
+              ⚡
+            </div>
+            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-amber-300">
+              Payment Confirmed
+            </div>
+            <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">
+              Welcome to PRO+!
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              Your payment was successful and PRO+ is now activated on your account. All 15 college program matches and school-specific essay approach guides are unlocked.
+            </p>
+
+            <div className="my-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+              <div className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                Now Unlocked with PRO+
+              </div>
+              <ul className="mt-2.5 space-y-2 text-xs text-slate-300">
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400 font-bold">✓</span>
+                  <span><strong>#1 Best-Fit Match</strong> — Full ranking and curriculum details</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400 font-bold">✓</span>
+                  <span><strong>PRO+ Essay Help</strong> — Essay approach strategies & personal hooks</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400 font-bold">✓</span>
+                  <span><strong>Deeper Rankings (#9+)</strong> — Full dataset match exploration</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400 font-bold">✓</span>
+                  <span><strong>PRO+ Profile Badge</strong> — Displayed beside your account</span>
+                </li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => {
+                const attId = proCelebration.attemptId
+                setProCelebration(null)
+                openProFeatures(attId)
+              }}
+              className="w-full rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-4 text-base font-black uppercase tracking-wide text-slate-950 shadow-xl shadow-amber-400/30 transition hover:scale-[1.02] hover:shadow-amber-400/50"
+            >
+              ✨ Access PRO+ Features & Essay Help →
+            </button>
+
+            <button
+              onClick={() => setProCelebration(null)}
+              className="mt-3 text-xs font-medium text-slate-400 hover:text-white"
+            >
+              Close and explore later
+            </button>
+          </div>
+        </div>
+      )}
+
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        user={user}
+        attemptId={resultsPayload?.attemptId}
+        feature="Upgrade to PRO+ to unlock your #1 match, deeper rankings (#9+), and school-specific essay approach guides."
+        onNavigateLegal={openLegal}
+      />
+
       {view === 'landing' && (
         <Landing
           user={user}
           onRefreshUser={refreshUser}
           onMyResults={goHistory}
+          onOpenProFeatures={openProFeatures}
           onStart={startQuizFlow}
           onNavigateLegal={openLegal}
         />
@@ -215,6 +452,7 @@ export default function App() {
           onHome={goHome}
           onStartQuiz={startQuizFlow}
           onOpenAttempt={openAttempt}
+          onOpenProFeatures={openProFeatures}
           onNavigateLegal={openLegal}
         />
       )}

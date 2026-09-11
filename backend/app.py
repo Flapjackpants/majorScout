@@ -111,6 +111,16 @@ def current_user():
         user = db.get(User, user_id)
         if user is None:
             return None
+        has_unlocked = (
+            db.query(QuizAttempt.id)
+            .filter(QuizAttempt.user_id == user_id, QuizAttempt.unlocked == True)
+            .first()
+            is not None
+        )
+        user._has_unlocked = has_unlocked
+        if (has_unlocked or user.is_admin) and user.subscription_status not in ("pro", "pro_plus", "active"):
+            user.subscription_status = "pro"
+            db.commit()
         # Keep attribute access after the session closes.
         db.expunge(user)
         return user
@@ -130,7 +140,7 @@ def login_required(fn):
 
 
 def attempt_access_unlocked(user: User, attempt: QuizAttempt) -> bool:
-    if user.is_admin:
+    if user.is_admin or user.is_pro:
         return True
     return bool(attempt.unlocked)
 
@@ -490,37 +500,199 @@ def billing_checkout(user):
 
     payload = request.get_json(silent=True) or {}
     attempt_id = payload.get("attempt_id")
-    if not attempt_id:
-        return jsonify({"error": "attempt_id is required to unlock results."}), 400
 
     db = get_session()
     try:
         u = db.get(User, user.id)
-        attempt = db.get(QuizAttempt, int(attempt_id))
-        if attempt is None or attempt.user_id != u.id:
-            return jsonify({"error": "Attempt not found."}), 404
-        if attempt.unlocked or u.is_admin:
-            return jsonify({"error": "This attempt is already unlocked."}), 400
+        attempt = None
+        if attempt_id:
+            attempt = db.get(QuizAttempt, int(attempt_id))
+            if attempt is None or attempt.user_id != u.id:
+                return jsonify({"error": "Attempt not found."}), 404
+        else:
+            attempt = (
+                db.query(QuizAttempt)
+                .filter_by(user_id=u.id)
+                .order_by(QuizAttempt.created_at.desc())
+                .first()
+            )
+
+        if attempt and (attempt.unlocked or u.is_admin):
+            return jsonify({"error": "This attempt is already unlocked with PRO+."}), 400
 
         if not u.stripe_customer_id:
             customer = stripe.Customer.create(email=u.email, name=u.name or u.email)
             u.stripe_customer_id = customer["id"]
             db.commit()
         customer_id = u.stripe_customer_id
-        aid = attempt.id
+        aid = attempt.id if attempt else None
     finally:
         db.close()
 
+    metadata = {"user_id": str(user.id)}
+    if aid:
+        metadata["attempt_id"] = str(aid)
+
+    attempt_param = f"&attempt_id={aid}" if aid else ""
     checkout = stripe.checkout.Session.create(
         mode="payment",
         customer=customer_id,
         line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
-        success_url=f"{_site_url()}/?billing=success&attempt_id={aid}",
-        cancel_url=f"{_site_url()}/?billing=cancel&attempt_id={aid}",
+        success_url=f"{_site_url()}/?billing=success&session_id={{CHECKOUT_SESSION_ID}}{attempt_param}",
+        cancel_url=f"{_site_url()}/?billing=cancel&session_id={{CHECKOUT_SESSION_ID}}{attempt_param}",
         client_reference_id=str(user.id),
-        metadata={"user_id": str(user.id), "attempt_id": str(aid)},
+        metadata=metadata,
     )
     return jsonify({"url": checkout.url})
+
+
+@app.post("/api/billing/verify-session")
+@login_required
+def billing_verify_session(user):
+    if not stripe.api_key:
+        return jsonify({"error": "Stripe is not configured."}), 503
+
+    payload = request.get_json(silent=True) or {}
+    session_id = payload.get("session_id")
+    attempt_id = payload.get("attempt_id")
+
+    if not session_id and not attempt_id:
+        return jsonify({"error": "session_id or attempt_id is required."}), 400
+
+    db = get_session()
+    try:
+        u = db.get(User, user.id)
+        if not u:
+            return jsonify({"error": "User not found."}), 404
+
+        session_obj = None
+        if session_id:
+            try:
+                session_obj = stripe.checkout.Session.retrieve(
+                    session_id, expand=["payment_intent"]
+                )
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "status": "error",
+                    "error": str(e),
+                    "message": f"Could not verify session with Stripe: {str(e)}",
+                }), 400
+
+        if session_obj:
+            meta = session_obj.metadata or {}
+            target_attempt_id = meta.get("attempt_id") or attempt_id
+
+            is_paid = session_obj.payment_status == "paid"
+            is_complete = session_obj.status == "complete"
+
+            if is_paid or is_complete:
+                target_attempt = None
+                if target_attempt_id:
+                    target_attempt = db.get(QuizAttempt, int(target_attempt_id))
+                    if target_attempt and target_attempt.user_id == u.id:
+                        target_attempt.unlocked = True
+                        target_attempt.unlocked_at = datetime.now(timezone.utc)
+                        target_attempt.stripe_checkout_session_id = session_obj.id
+
+                u.subscription_status = "pro"
+                if session_obj.customer and not u.stripe_customer_id:
+                    u.stripe_customer_id = session_obj.customer
+                db.commit()
+
+                if not target_attempt:
+                    target_attempt = (
+                        db.query(QuizAttempt)
+                        .filter(QuizAttempt.user_id == u.id)
+                        .order_by(QuizAttempt.created_at.desc())
+                        .first()
+                    )
+
+                u._has_unlocked = True
+                return jsonify({
+                    "success": True,
+                    "status": "paid",
+                    "message": "Payment successful! PRO+ features are now unlocked.",
+                    "attempt_id": target_attempt.id if target_attempt else None,
+                    "attempt": serialize_attempt_payload(u, target_attempt) if target_attempt else None,
+                    "user": u.to_public(),
+                })
+
+            payment_intent = session_obj.payment_intent
+            last_err = None
+            pi_status = None
+            if isinstance(payment_intent, dict) or hasattr(payment_intent, "get"):
+                pi_status = payment_intent.get("status")
+                last_err = payment_intent.get("last_payment_error")
+            elif payment_intent:
+                pi_status = getattr(payment_intent, "status", None)
+                last_err = getattr(payment_intent, "last_payment_error", None)
+
+            if pi_status == "processing":
+                return jsonify({
+                    "success": False,
+                    "status": "processing",
+                    "message": "Your payment is currently processing by Stripe/Link. It should complete shortly.",
+                    "attempt_id": target_attempt_id,
+                })
+
+            if last_err:
+                err_msg = (
+                    last_err.get("message")
+                    if isinstance(last_err, dict)
+                    else getattr(last_err, "message", "Payment authorization failed.")
+                )
+                decline_code = (
+                    last_err.get("decline_code")
+                    if isinstance(last_err, dict)
+                    else getattr(last_err, "decline_code", None)
+                )
+                full_msg = f"{err_msg} ({decline_code})" if decline_code else err_msg
+                return jsonify({
+                    "success": False,
+                    "status": "failed",
+                    "error": full_msg,
+                    "message": f"Payment failed: {full_msg}",
+                    "attempt_id": target_attempt_id,
+                })
+
+            if session_obj.status == "expired":
+                return jsonify({
+                    "success": False,
+                    "status": "expired",
+                    "error": "The payment session expired.",
+                    "message": "The checkout session timed out before payment was completed.",
+                    "attempt_id": target_attempt_id,
+                })
+
+            return jsonify({
+                "success": False,
+                "status": "incomplete",
+                "error": "Payment was not completed.",
+                "message": "Payment was cancelled or not completed.",
+                "attempt_id": target_attempt_id,
+            })
+
+        if attempt_id:
+            att = db.get(QuizAttempt, int(attempt_id))
+            if att and att.user_id == u.id and (att.unlocked or u.is_pro):
+                return jsonify({
+                    "success": True,
+                    "status": "paid",
+                    "message": "Attempt is unlocked with PRO+.",
+                    "attempt_id": att.id,
+                    "attempt": serialize_attempt_payload(u, att),
+                    "user": u.to_public(),
+                })
+
+        return jsonify({
+            "success": False,
+            "status": "not_found",
+            "error": "Payment session not found.",
+            "message": "Could not locate that checkout session.",
+        }), 404
+    finally:
+        db.close()
 
 
 @app.post("/api/billing/portal")
@@ -561,15 +733,18 @@ def billing_webhook():
                 attempt.unlocked = True
                 attempt.unlocked_at = datetime.now(timezone.utc)
                 attempt.stripe_checkout_session_id = session_id
-                if customer_id:
-                    u = db.get(User, attempt.user_id)
-                    if u and not u.stripe_customer_id:
+                u = db.get(User, attempt.user_id)
+                if u:
+                    u.subscription_status = "pro"
+                    if customer_id and not u.stripe_customer_id:
                         u.stripe_customer_id = customer_id
                 db.commit()
-        elif user_id and customer_id:
+        elif user_id:
             u = db.get(User, int(user_id))
             if u:
-                u.stripe_customer_id = customer_id
+                u.subscription_status = "pro"
+                if customer_id and not u.stripe_customer_id:
+                    u.stripe_customer_id = customer_id
                 db.commit()
     finally:
         db.close()

@@ -15,7 +15,15 @@ function formatDate(iso) {
   }
 }
 
-export default function History({ user, onRefreshUser, onHome, onOpenAttempt, onStartQuiz, onNavigateLegal }) {
+export default function History({
+  user,
+  onRefreshUser,
+  onHome,
+  onOpenAttempt,
+  onStartQuiz,
+  onOpenProFeatures,
+  onNavigateLegal,
+}) {
   const [attempts, setAttempts] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -44,6 +52,7 @@ export default function History({ user, onRefreshUser, onHome, onOpenAttempt, on
         user={user}
         onHome={onHome}
         onRefreshUser={onRefreshUser}
+        onOpenProFeatures={onOpenProFeatures}
         rightSlot={
           <button
             onClick={onStartQuiz}
@@ -58,8 +67,8 @@ export default function History({ user, onRefreshUser, onHome, onOpenAttempt, on
         <p className="text-xs font-bold uppercase tracking-widest text-sky-300">Account</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">My results</h1>
         <p className="mt-3 text-slate-400">
-          Reopen past quiz attempts. Unlock a result set once to see your #1 match, deeper ranks,
-          and essay guides for that attempt.
+          Reopen past quiz attempts. Upgrade to PRO+ to see your #1 match, deeper ranks,
+          and school-specific essay guides for that attempt.
         </p>
 
         {loading && (
@@ -98,13 +107,13 @@ export default function History({ user, onRefreshUser, onHome, onOpenAttempt, on
                   <div>
                     <div className="flex items-center gap-2">
                       <span
-                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                           a.unlocked
-                            ? 'bg-amber-400/15 text-amber-300'
+                            ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950'
                             : 'bg-slate-500/20 text-slate-400'
                         }`}
                       >
-                        {a.unlocked ? 'Unlocked' : 'Locked'}
+                        {a.unlocked ? '⚡ PRO+' : 'Free'}
                       </span>
                       <span className="text-xs text-slate-500">{formatDate(a.created_at)}</span>
                     </div>
@@ -117,7 +126,7 @@ export default function History({ user, onRefreshUser, onHome, onOpenAttempt, on
                     </h2>
                     {a.top_university && (
                       <p className="mt-1 text-sm text-slate-400">
-                        {a.unlocked ? 'Best match · ' : 'Sample mid-rank · '}
+                        {a.unlocked ? 'PRO+ Best match · ' : 'Sample mid-rank · '}
                         {a.top_university}
                         {a.match_percent != null ? ` · ${a.match_percent}%` : ''}
                       </p>

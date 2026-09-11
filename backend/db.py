@@ -47,6 +47,14 @@ class User(Base):
 
     attempts: Mapped[list[QuizAttempt]] = relationship(back_populates="user")
 
+    @property
+    def is_pro(self) -> bool:
+        return bool(
+            self.is_admin
+            or (self.subscription_status in ("active", "pro", "pro_plus"))
+            or getattr(self, "_has_unlocked", False)
+        )
+
     def to_public(self) -> dict:
         return {
             "id": self.id,
@@ -54,6 +62,7 @@ class User(Base):
             "name": self.name,
             "picture": self.picture,
             "is_admin": self.is_admin,
+            "is_pro": self.is_pro,
         }
 
 

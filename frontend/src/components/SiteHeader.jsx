@@ -6,15 +6,16 @@ function UserAvatar({ user, onClick }) {
   const [imgFailed, setImgFailed] = useState(false)
   const initial = (user.name || user.email || '?')[0].toUpperCase()
 
+  const proRing = user.is_pro ? 'ring-2 ring-amber-400/80' : ''
   const className =
-    'flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 transition hover:border-sky-400/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60'
+    `flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 ${proRing} transition hover:border-sky-400/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60`
 
   if (!user.picture || imgFailed) {
     return (
       <button
         type="button"
         onClick={onClick}
-        title="Switch account"
+        title={user.is_pro ? 'PRO+ Account · Switch account' : 'Switch account'}
         aria-label="Switch account"
         className={`${className} bg-white/10 text-xs font-bold`}
       >
@@ -27,7 +28,7 @@ function UserAvatar({ user, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      title="Switch account"
+      title={user.is_pro ? 'PRO+ Account · Switch account' : 'Switch account'}
       aria-label="Switch account"
       className={className}
     >
@@ -48,6 +49,7 @@ export default function SiteHeader({
   rightSlot,
   onRefreshUser,
   onMyResults,
+  onOpenProFeatures,
   unlockedBadge,
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -81,8 +83,16 @@ export default function SiteHeader({
             <div className="flex items-center gap-3">
               {unlockedBadge && (
                 <span className="hidden rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300 sm:inline">
-                  Unlocked
+                  ⚡ PRO+
                 </span>
+              )}
+              {onOpenProFeatures && user.is_pro && (
+                <button
+                  onClick={onOpenProFeatures}
+                  className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-slate-950 shadow-md shadow-amber-400/25 transition hover:scale-105 hover:shadow-amber-400/40"
+                >
+                  <span>✨</span> PRO+ Features & Essay Help
+                </button>
               )}
               {onMyResults && (
                 <button
@@ -92,10 +102,20 @@ export default function SiteHeader({
                   My results
                 </button>
               )}
-              <UserAvatar
-                user={user}
-                onClick={() => startGoogleLogin({ selectAccount: true })}
-              />
+              <div className="flex items-center gap-2">
+                <UserAvatar
+                  user={user}
+                  onClick={() => startGoogleLogin({ selectAccount: true })}
+                />
+                {user.is_pro && (
+                  <span
+                    title="PRO+ Account Active"
+                    className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider text-slate-950 shadow-md shadow-amber-400/25 ring-1 ring-amber-300/50"
+                  >
+                    <span>⚡</span> PRO+
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => setConfirmOpen(true)}
                 className="rounded-full border border-white/15 px-4 py-1.5 text-sm font-semibold text-slate-300 transition hover:border-sky-400/50 hover:text-white"

@@ -29,14 +29,25 @@ export async function logout() {
 }
 
 export async function startCheckout(attemptId) {
-  if (!attemptId) throw new Error('Save your quiz results first, then unlock.')
   const res = await api('/api/billing/checkout', {
     method: 'POST',
-    body: JSON.stringify({ attempt_id: attemptId }),
+    body: JSON.stringify(attemptId ? { attempt_id: attemptId } : {}),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || 'Checkout failed')
   window.location.href = data.url
+}
+
+export async function verifyCheckoutSession({ sessionId, attemptId } = {}) {
+  const res = await api('/api/billing/verify-session', {
+    method: 'POST',
+    body: JSON.stringify({
+      session_id: sessionId || undefined,
+      attempt_id: attemptId || undefined,
+    }),
+  })
+  const data = await res.json()
+  return { ok: res.ok, httpStatus: res.status, ...data }
 }
 
 export async function fetchAttempts() {

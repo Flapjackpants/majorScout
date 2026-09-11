@@ -24,7 +24,7 @@ const STEPS = [
   },
   {
     title: 'Meet your matches',
-    body: 'See your free mid-range fits. Sign in to save history; unlock a result set once for #1, deeper ranks, and essay approaches.',
+    body: 'See your free mid-range fits. Sign in to save history; upgrade to PRO+ for #1, deeper ranks, and school essay approaches.',
   },
 ]
 
@@ -40,7 +40,7 @@ const REVIEWS = [
     name: 'Jordan T.',
     role: 'HS senior · Texas',
     quote:
-      'Filled in my real SAT instead of picking a bucket. Felt more honest. Free results alone were useful; unlocking my #1 match was worth it.',
+      'Filled in my real SAT instead of picking a bucket. Felt more honest. Free results alone were useful; upgrading to PRO+ for my #1 match was worth it.',
     rating: 5,
   },
   {
@@ -71,7 +71,14 @@ function Stars({ n }) {
   )
 }
 
-export default function Landing({ onStart, user, onRefreshUser, onMyResults, onNavigateLegal }) {
+export default function Landing({
+  onStart,
+  user,
+  onRefreshUser,
+  onMyResults,
+  onOpenProFeatures,
+  onNavigateLegal,
+}) {
   const [stats, setStats] = useState(null)
 
   useEffect(() => {
@@ -97,6 +104,7 @@ export default function Landing({ onStart, user, onRefreshUser, onMyResults, onN
         onHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         onRefreshUser={onRefreshUser}
         onMyResults={user ? onMyResults : undefined}
+        onOpenProFeatures={onOpenProFeatures}
         rightSlot={
           <button
             onClick={onStart}
@@ -109,6 +117,17 @@ export default function Landing({ onStart, user, onRefreshUser, onMyResults, onN
 
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-16 sm:pt-24">
         <div className="animate-fade-up mx-auto max-w-3xl text-center">
+          {user?.is_pro && onOpenProFeatures && (
+            <div className="mb-6 flex justify-center">
+              <button
+                onClick={onOpenProFeatures}
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 shadow-xl shadow-amber-400/25 transition hover:scale-105 hover:shadow-amber-400/40 animate-pulse"
+              >
+                <span>✨</span> Access PRO+ Features & Essay Help →
+              </button>
+            </div>
+          )}
+
           <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-sky-300">
             Data-driven major matching
           </p>
@@ -137,7 +156,7 @@ export default function Landing({ onStart, user, onRefreshUser, onMyResults, onN
             Find my major
           </button>
           <p className="mt-3 text-sm text-slate-500">
-            Free core quiz · ~8 minutes · Sign in to save · Unlock for full results
+            Free core quiz · ~8 minutes · Sign in to save · Upgrade to PRO+ for full results & essay help
           </p>
         </div>
 
