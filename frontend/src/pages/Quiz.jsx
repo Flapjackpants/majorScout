@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, fetchFollowupQuestions, startCheckout, startGoogleLogin } from '../api.js'
 import ActivitiesEditor from '../components/ActivitiesEditor.jsx'
 import { activitiesSummary, cleanActivitiesValue, emptyActivitiesValue } from '../lib/activities.js'
+import { tracker } from '../lib/tracker.js'
 
 const OPTION_KEYS = ['1', '2', '3', '4']
 
@@ -137,6 +138,7 @@ export default function Quiz({
           }
         }
         setBank({ ...data, questions })
+        tracker.trackQuizStart(questions.length, startSectionId)
       })
       .catch(() => setError('Could not load the quiz. Is the backend running?'))
   }, [startSectionId])
@@ -201,6 +203,10 @@ export default function Quiz({
     setSubmitting(true)
     setError(null)
     try {
+      tracker.trackQuizComplete({
+        total_answers: Object.keys(finalAnswers || {}).length,
+        total_questions: questions.length,
+      })
       onComplete(await computeMatch(finalAnswers))
     } catch {
       setError('Something went wrong computing your matches. Please try again.')
@@ -215,6 +221,7 @@ export default function Quiz({
     }
     // AI follow-ups are PRO+ only. Free / guest users get the paywall popup.
     if (!user?.is_pro) {
+      tracker.sendEvent('quiz_paywall_view', { step: index + 1, total_questions: questions.length })
       setPaywallOpen(true)
       return
     }
@@ -244,6 +251,7 @@ export default function Quiz({
   async function unlockFromPaywall() {
     setPaywallBusy(true)
     setError(null)
+    tracker.trackUpgradeClick('pro', 'quiz_paywall')
     try {
       if (!user) {
         try {
@@ -273,8 +281,11 @@ export default function Quiz({
 
   function advance(nextAnswers) {
     setSelected(null)
-    if (index + 1 < questions.length) {
-      setIndex(index + 1)
+    const nextIdx = index + 1
+    if (nextIdx < questions.length) {
+      const nextQ = questions[nextIdx]
+      tracker.trackQuizStep(nextIdx, questions.length, nextQ?.id, nextQ?.section)
+      setIndex(nextIdx)
     } else if (phase === 'base' && includePremiumFollowup) {
       maybeLoadFollowup(nextAnswers)
     } else {

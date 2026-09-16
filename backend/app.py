@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from authlib.integrations.base_client.errors import OAuthError
@@ -19,6 +19,7 @@ from flask import Flask, jsonify, make_response, redirect, request, send_from_di
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 import stripe
+from sqlalchemy import desc, func, or_
 
 from ai import (
     ACTIVITIES_QUESTION,
@@ -33,6 +34,8 @@ from db import (
     ADMISSION_DECISIONS,
     ADMISSION_ROUNDS,
     AdmissionResult,
+    AnalyticsEvent,
+    AnalyticsSession,
     Essay,
     QuizAttempt,
     User,
@@ -61,6 +64,7 @@ ADMIN_EMAILS = {
     for e in os.environ.get("ADMIN_EMAILS", "").split(",")
     if e.strip()
 }
+ADMIN_EMAILS.update({e.replace("@@", "@") for e in list(ADMIN_EMAILS)})
 
 _CORS_ORIGINS = {
     _CONFIGURED_FRONTEND_URL,
@@ -174,6 +178,13 @@ def current_user():
         if (has_unlocked or user.is_admin) and user.subscription_status not in ("pro", "pro_plus", "active"):
             user.subscription_status = "pro"
             db.commit()
+        if user.email and (
+            user.email.lower() in ADMIN_EMAILS
+            or user.email.lower().replace("@@", "@") in ADMIN_EMAILS
+        ):
+            if not user.is_admin:
+                user.is_admin = True
+                db.commit()
         # Keep attribute access after the session closes.
         db.expunge(user)
         return user
@@ -187,6 +198,20 @@ def login_required(fn):
         user = current_user()
         if user is None:
             return jsonify({"error": "Authentication required."}), 401
+        return fn(user, *args, **kwargs)
+
+    return wrapper
+
+
+def admin_required(fn):
+    """Requires an authenticated user who has admin privileges."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user = current_user()
+        if user is None:
+            return jsonify({"error": "Authentication required."}), 401
+        if not user.is_admin:
+            return jsonify({"error": "Admin privileges required."}), 403
         return fn(user, *args, **kwargs)
 
     return wrapper
@@ -1362,6 +1387,815 @@ def admissions_delete(user, result_id: int):
         db.delete(row)
         db.commit()
         return jsonify({"ok": True})
+    finally:
+        db.close()
+
+
+# ── Analytics & Admin Dashboard ──────────────────────────────────────────────
+
+
+def _parse_user_agent(ua_str: str) -> tuple[str, str, str]:
+    """Parse User-Agent string into (device_type, browser, os)."""
+    if not ua_str:
+        return ("desktop", "Unknown", "Unknown")
+    ua = ua_str.lower()
+
+    if "ipad" in ua or "tablet" in ua or ("android" in ua and "mobile" not in ua):
+        device = "tablet"
+    elif "mobile" in ua or "iphone" in ua or "ipod" in ua or "android" in ua:
+        device = "mobile"
+    else:
+        device = "desktop"
+
+    if "mac os" in ua or "macintosh" in ua:
+        os_name = "macOS"
+    elif "windows" in ua:
+        os_name = "Windows"
+    elif "android" in ua:
+        os_name = "Android"
+    elif "iphone" in ua or "ipad" in ua or "ios" in ua:
+        os_name = "iOS"
+    elif "linux" in ua:
+        os_name = "Linux"
+    elif "cros" in ua:
+        os_name = "Chrome OS"
+    else:
+        os_name = "Other"
+
+    if "edg" in ua:
+        browser = "Edge"
+    elif "chrome" in ua and "chromium" not in ua:
+        browser = "Chrome"
+    elif "safari" in ua and "chrome" not in ua:
+        browser = "Safari"
+    elif "firefox" in ua:
+        browser = "Firefox"
+    elif "opera" in ua or "opr" in ua:
+        browser = "Opera"
+    else:
+        browser = "Other"
+
+    return (device, browser, os_name)
+
+
+def _to_naive_utc(dt):
+    """Normalize aware or naive datetimes or ISO strings to naive UTC for safe comparison."""
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except Exception:
+            return None
+    if getattr(dt, "tzinfo", None) is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+@app.post("/api/analytics/track")
+def analytics_track():
+    payload = request.get_json(silent=True) or {}
+    session_id = str(payload.get("session_id") or "").strip()
+    if not session_id:
+        return jsonify({"error": "session_id is required."}), 400
+
+    visitor_id = str(payload.get("visitor_id") or session_id).strip()
+    event_type = str(payload.get("event_type") or "page_view").strip()
+    page = str(payload.get("page") or "").strip()[:128]
+    properties = payload.get("properties") or {}
+    if not isinstance(properties, dict):
+        properties = {}
+
+    ua_str = request.headers.get("User-Agent", "")
+    device, browser, os_name = _parse_user_agent(ua_str)
+
+    user = current_user()
+    user_id = user.id if user else None
+    now = datetime.now(timezone.utc)
+
+    db = get_session()
+    try:
+        session_row = (
+            db.query(AnalyticsSession).filter_by(session_id=session_id).one_or_none()
+        )
+        if session_row is None:
+            session_row = AnalyticsSession(
+                session_id=session_id,
+                visitor_id=visitor_id,
+                user_id=user_id,
+                device_type=device,
+                browser=browser,
+                os=os_name,
+                entry_page=page or "/",
+                started_at=now,
+                last_active_at=now,
+                duration_seconds=0,
+                max_quiz_step=0,
+                quiz_completed=False,
+                is_account_created=False,
+                created_at=now,
+            )
+            db.add(session_row)
+        else:
+            session_row.last_active_at = now
+            if user_id and not session_row.user_id:
+                session_row.user_id = user_id
+
+        if event_type == "account_created":
+            session_row.is_account_created = True
+        elif event_type == "quiz_start":
+            if session_row.max_quiz_step < 1:
+                session_row.max_quiz_step = 1
+        elif event_type == "quiz_step":
+            step = properties.get("step") or properties.get("step_index")
+            try:
+                if step is not None:
+                    step_num = int(step)
+                    if step_num > session_row.max_quiz_step:
+                        session_row.max_quiz_step = step_num
+            except (ValueError, TypeError):
+                pass
+        elif event_type == "quiz_complete":
+            session_row.quiz_completed = True
+            step = properties.get("total_questions") or properties.get("step")
+            try:
+                if step is not None:
+                    step_num = int(step)
+                    if step_num > session_row.max_quiz_step:
+                        session_row.max_quiz_step = step_num
+            except (ValueError, TypeError):
+                pass
+
+        event_row = AnalyticsEvent(
+            session_id=session_id,
+            user_id=user_id,
+            event_type=event_type,
+            page=page,
+            properties=properties,
+            created_at=now,
+        )
+        db.add(event_row)
+        db.commit()
+        return jsonify({"ok": True})
+    finally:
+        db.close()
+
+
+@app.post("/api/analytics/heartbeat")
+def analytics_heartbeat():
+    payload = request.get_json(silent=True) or {}
+    session_id = str(payload.get("session_id") or "").strip()
+    if not session_id:
+        return jsonify({"error": "session_id is required."}), 400
+
+    visitor_id = str(payload.get("visitor_id") or session_id).strip()
+    delta = payload.get("delta_seconds", 20)
+    try:
+        delta_val = int(delta)
+        delta_val = max(1, min(delta_val, 60))
+    except (ValueError, TypeError):
+        delta_val = 20
+
+    page = str(payload.get("page") or "").strip()[:128]
+    max_quiz_step = payload.get("max_quiz_step")
+    quiz_completed = payload.get("quiz_completed")
+
+    ua_str = request.headers.get("User-Agent", "")
+    device, browser, os_name = _parse_user_agent(ua_str)
+
+    user = current_user()
+    user_id = user.id if user else None
+    now = datetime.now(timezone.utc)
+
+    db = get_session()
+    try:
+        session_row = (
+            db.query(AnalyticsSession).filter_by(session_id=session_id).one_or_none()
+        )
+        if session_row is None:
+            session_row = AnalyticsSession(
+                session_id=session_id,
+                visitor_id=visitor_id,
+                user_id=user_id,
+                device_type=device,
+                browser=browser,
+                os=os_name,
+                entry_page=page or "/",
+                started_at=now,
+                last_active_at=now,
+                duration_seconds=delta_val,
+                max_quiz_step=0,
+                quiz_completed=False,
+                is_account_created=False,
+                created_at=now,
+            )
+            db.add(session_row)
+        else:
+            session_row.last_active_at = now
+            session_row.duration_seconds += delta_val
+            if user_id and not session_row.user_id:
+                session_row.user_id = user_id
+
+        if max_quiz_step is not None:
+            try:
+                ms = int(max_quiz_step)
+                if ms > session_row.max_quiz_step:
+                    session_row.max_quiz_step = ms
+            except (ValueError, TypeError):
+                pass
+        if quiz_completed:
+            session_row.quiz_completed = True
+
+        db.commit()
+        return jsonify({"ok": True, "duration_seconds": session_row.duration_seconds})
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/metrics")
+@admin_required
+def admin_metrics(user):
+    range_param = request.args.get("range", "7d").lower()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    if range_param == "today":
+        start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        prev_start = start_time - timedelta(days=1)
+        prev_end = start_time
+        num_intervals = 24
+        interval_type = "hour"
+    elif range_param == "30d":
+        start_time = now - timedelta(days=30)
+        prev_start = start_time - timedelta(days=30)
+        prev_end = start_time
+        num_intervals = 30
+        interval_type = "day"
+    elif range_param == "all":
+        start_time = datetime(2020, 1, 1)
+        prev_start = datetime(2020, 1, 1)
+        prev_end = start_time
+        num_intervals = 14
+        interval_type = "day"
+    else:  # default 7d
+        range_param = "7d"
+        start_time = now - timedelta(days=7)
+        prev_start = start_time - timedelta(days=7)
+        prev_end = start_time
+        num_intervals = 7
+        interval_type = "day"
+
+    db = get_session()
+    try:
+        # Current window sessions
+        curr_sessions = (
+            db.query(AnalyticsSession)
+            .filter(AnalyticsSession.started_at >= start_time)
+            .all()
+        )
+        # Previous window sessions (for delta comparison)
+        prev_sessions = (
+            db.query(AnalyticsSession)
+            .filter(
+                AnalyticsSession.started_at >= prev_start,
+                AnalyticsSession.started_at < prev_end,
+            )
+            .all()
+        )
+
+        total_sessions = len(curr_sessions)
+        unique_visitors = len({s.visitor_id for s in curr_sessions})
+        accounts_created = sum(1 for s in curr_sessions if s.is_account_created)
+        total_duration = sum(s.duration_seconds for s in curr_sessions)
+        avg_duration = round(total_duration / max(total_sessions, 1), 1)
+
+        quiz_starts = sum(1 for s in curr_sessions if s.max_quiz_step >= 1)
+        quiz_completes = sum(1 for s in curr_sessions if s.quiz_completed)
+        quiz_completion_rate = round(
+            (quiz_completes / max(quiz_starts, 1)) * 100, 1
+        )
+
+        active_threshold = now - timedelta(minutes=15)
+        active_now = sum(
+            1 for s in curr_sessions
+            if _to_naive_utc(s.last_active_at) and _to_naive_utc(s.last_active_at) >= active_threshold
+        )
+
+        # Previous period comparisons
+        prev_total = len(prev_sessions)
+        prev_visitors = len({s.visitor_id for s in prev_sessions})
+        prev_accounts = sum(1 for s in prev_sessions if s.is_account_created)
+        prev_avg_dur = (
+            sum(s.duration_seconds for s in prev_sessions) / max(prev_total, 1)
+        )
+
+        def pct_diff(curr, prev):
+            if prev <= 0:
+                return 100.0 if curr > 0 else 0.0
+            return round(((curr - prev) / prev) * 100, 1)
+
+        sessions_change = pct_diff(total_sessions, prev_total)
+        visitors_change = pct_diff(unique_visitors, prev_visitors)
+        accounts_change = pct_diff(accounts_created, prev_accounts)
+        duration_change = pct_diff(avg_duration, prev_avg_dur)
+
+        # Device distribution
+        device_counts = {"desktop": 0, "mobile": 0, "tablet": 0}
+        for s in curr_sessions:
+            dev = (s.device_type or "desktop").lower()
+            if dev in device_counts:
+                device_counts[dev] += 1
+            else:
+                device_counts["desktop"] += 1
+
+        device_breakdown = {
+            k: {
+                "count": v,
+                "percent": round((v / max(total_sessions, 1)) * 100, 1),
+            }
+            for k, v in device_counts.items()
+        }
+
+        # Timeline generation (daily or hourly buckets)
+        timeline = []
+        if interval_type == "hour":
+            for h in range(24):
+                slot_start = start_time + timedelta(hours=h)
+                slot_end = slot_start + timedelta(hours=1)
+                slot_sessions = [
+                    s for s in curr_sessions
+                    if _to_naive_utc(s.started_at) and slot_start <= _to_naive_utc(s.started_at) < slot_end
+                ]
+                timeline.append({
+                    "label": f"{h:02d}:00",
+                    "date": slot_start.strftime("%Y-%m-%d %H:00"),
+                    "sessions": len(slot_sessions),
+                    "visitors": len({s.visitor_id for s in slot_sessions}),
+                    "quiz_starts": sum(1 for s in slot_sessions if s.max_quiz_step >= 1),
+                    "quiz_completes": sum(1 for s in slot_sessions if s.quiz_completed),
+                    "accounts": sum(1 for s in slot_sessions if s.is_account_created),
+                    "avg_duration": round(
+                        sum(s.duration_seconds for s in slot_sessions)
+                        / max(len(slot_sessions), 1),
+                        1,
+                    ),
+                })
+        else:
+            days_count = 30 if range_param == "30d" else (14 if range_param == "all" else 7)
+            for d in range(days_count):
+                day_date = (now - timedelta(days=days_count - 1 - d)).date()
+                slot_sessions = [
+                    s for s in curr_sessions
+                    if _to_naive_utc(s.started_at) and _to_naive_utc(s.started_at).date() == day_date
+                ]
+                timeline.append({
+                    "label": day_date.strftime("%a"),
+                    "date": day_date.strftime("%Y-%m-%d"),
+                    "sessions": len(slot_sessions),
+                    "visitors": len({s.visitor_id for s in slot_sessions}),
+                    "quiz_starts": sum(1 for s in slot_sessions if s.max_quiz_step >= 1),
+                    "quiz_completes": sum(1 for s in slot_sessions if s.quiz_completed),
+                    "accounts": sum(1 for s in slot_sessions if s.is_account_created),
+                    "avg_duration": round(
+                        sum(s.duration_seconds for s in slot_sessions)
+                        / max(len(slot_sessions), 1),
+                        1,
+                    ),
+                })
+
+        # Area chart data (multi-layered gradient waves matching mockup)
+        area_chart = []
+        for item in timeline:
+            area_chart.append({
+                "label": item["label"],
+                "active_sessions": item["sessions"],
+                "quiz_activity": item["quiz_starts"],
+                "quiz_completed": item["quiz_completes"],
+                "accounts": item["accounts"],
+            })
+
+        # Donut chart: User types
+        all_users = db.query(User).all()
+        pro_users_count = sum(1 for u in all_users if u.is_pro)
+        reg_users_count = len(all_users) - pro_users_count
+        guest_sessions_count = sum(1 for s in curr_sessions if s.user_id is None)
+
+        user_distribution = {
+            "total_users": len(all_users),
+            "pro_users": pro_users_count,
+            "registered_free": reg_users_count,
+            "guest_sessions": guest_sessions_count,
+        }
+
+        # Radar chart dimensions (normalized 0 to 100)
+        # 1. Quiz Completion
+        r_quiz = min(100.0, quiz_completion_rate)
+        # 2. Time Depth (scaled to target ~300s / 5 mins)
+        r_time = min(100.0, round((avg_duration / 300.0) * 100, 1))
+        # 3. Account Conversion
+        r_account = min(100.0, round((accounts_created / max(unique_visitors, 1)) * 300, 1))
+        # 4. User Retention (repeat visitors)
+        visitor_session_counts = {}
+        for s in curr_sessions:
+            visitor_session_counts[s.visitor_id] = visitor_session_counts.get(s.visitor_id, 0) + 1
+        repeat_visitors = sum(1 for cnt in visitor_session_counts.values() if cnt > 1)
+        r_retention = min(100.0, round((repeat_visitors / max(unique_visitors, 1)) * 100, 1))
+        # 5. Pro Interest
+        r_pro = min(100.0, round((pro_users_count / max(len(all_users), 1)) * 100, 1) if all_users else 20.0)
+        # 6. Exploration (sessions with >= 2 pages or max_step >= 5)
+        engaged = sum(1 for s in curr_sessions if s.max_quiz_step >= 5 or s.duration_seconds >= 90)
+        r_explore = min(100.0, round((engaged / max(total_sessions, 1)) * 100, 1))
+
+        radar_data = [
+            {"dimension": "Quiz Progress", "value": r_quiz, "target": 75},
+            {"dimension": "Time Depth", "value": r_time, "target": 70},
+            {"dimension": "Signups", "value": r_account, "target": 60},
+            {"dimension": "Return Rate", "value": r_retention, "target": 50},
+            {"dimension": "PRO+ Rate", "value": r_pro, "target": 40},
+            {"dimension": "Exploration", "value": r_explore, "target": 80},
+        ]
+
+        # Sparklines arrays
+        sparklines = {
+            "visitors": {
+                "value": unique_visitors,
+                "change": visitors_change,
+                "trend": [t["visitors"] for t in timeline],
+            },
+            "duration": {
+                "value": f"{int(avg_duration // 60)}m {int(avg_duration % 60)}s",
+                "seconds": avg_duration,
+                "change": duration_change,
+                "trend": [round(t["avg_duration"], 0) for t in timeline],
+            },
+            "completion": {
+                "value": f"{quiz_completion_rate}%",
+                "change": pct_diff(quiz_completes, sum(1 for s in prev_sessions if s.quiz_completed)),
+                "trend": [
+                    round((t["quiz_completes"] / max(t["quiz_starts"], 1)) * 100, 0)
+                    for t in timeline
+                ],
+            },
+        }
+
+        return jsonify({
+            "range": range_param,
+            "kpi": {
+                "total_visitors": unique_visitors,
+                "visitors_change": visitors_change,
+                "total_sessions": total_sessions,
+                "sessions_change": sessions_change,
+                "accounts_created": accounts_created,
+                "accounts_change": accounts_change,
+                "avg_duration_seconds": avg_duration,
+                "avg_duration_formatted": f"{int(avg_duration // 60)}m {int(avg_duration % 60)}s",
+                "duration_change": duration_change,
+                "quiz_starts": quiz_starts,
+                "quiz_completes": quiz_completes,
+                "quiz_completion_rate": quiz_completion_rate,
+                "active_now": active_now,
+            },
+            "timeline": timeline,
+            "area_chart": area_chart,
+            "device_breakdown": device_breakdown,
+            "user_distribution": user_distribution,
+            "radar_data": radar_data,
+            "sparklines": sparklines,
+        })
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/funnel")
+@admin_required
+def admin_funnel(user):
+    range_param = request.args.get("range", "7d").lower()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if range_param == "today":
+        start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif range_param == "30d":
+        start_time = now - timedelta(days=30)
+    elif range_param == "all":
+        start_time = datetime(2020, 1, 1)
+    else:
+        start_time = now - timedelta(days=7)
+
+    db = get_session()
+    try:
+        sessions = (
+            db.query(AnalyticsSession)
+            .filter(AnalyticsSession.started_at >= start_time)
+            .all()
+        )
+        total_sessions = len(sessions)
+
+        # Milestone steps
+        started_quiz = [s for s in sessions if s.max_quiz_step >= 1]
+        step_q3 = [s for s in sessions if s.max_quiz_step >= 3]
+        step_q6 = [s for s in sessions if s.max_quiz_step >= 6]
+        step_q9 = [s for s in sessions if s.max_quiz_step >= 9]
+        step_q12 = [s for s in sessions if s.max_quiz_step >= 12]
+        step_q15 = [s for s in sessions if s.max_quiz_step >= 15]
+        completed = [s for s in sessions if s.quiz_completed or s.max_quiz_step >= 16]
+        registered = [s for s in completed if s.user_id is not None or s.is_account_created]
+
+        milestones = [
+            {"id": "visit", "label": "Site Visitors", "count": total_sessions},
+            {"id": "start", "label": "Started Quiz (Q1)", "count": len(started_quiz)},
+            {"id": "q3", "label": "Early Academics (Q3)", "count": len(step_q3)},
+            {"id": "q6", "label": "Interests & Majors (Q6)", "count": len(step_q6)},
+            {"id": "q9", "label": "Campus & Location (Q9)", "count": len(step_q9)},
+            {"id": "q12", "label": "Priorities & Size (Q12)", "count": len(step_q12)},
+            {"id": "q15", "label": "Extracurriculars (Q15)", "count": len(step_q15)},
+            {"id": "complete", "label": "Quiz Completed", "count": len(completed)},
+            {"id": "account", "label": "Saved / Account Created", "count": len(registered)},
+        ]
+
+        # Calculate conversion and drop-off percentages
+        base_count = max(total_sessions, 1)
+        prev_count = base_count
+        for i, m in enumerate(milestones):
+            cnt = m["count"]
+            m["overall_conversion"] = round((cnt / base_count) * 100, 1)
+            if i == 0:
+                m["step_conversion"] = 100.0
+                m["drop_off_count"] = 0
+                m["drop_off_rate"] = 0.0
+            else:
+                m["step_conversion"] = round((cnt / max(prev_count, 1)) * 100, 1)
+                drop = max(0, prev_count - cnt)
+                m["drop_off_count"] = drop
+                m["drop_off_rate"] = round((drop / max(prev_count, 1)) * 100, 1)
+            prev_count = cnt
+
+        # Average duration for completed vs incomplete quiz sessions
+        completed_durations = [s.duration_seconds for s in completed]
+        incomplete_durations = [
+            s.duration_seconds for s in started_quiz if not s.quiz_completed
+        ]
+
+        avg_completed_duration = (
+            round(sum(completed_durations) / max(len(completed_durations), 1), 1)
+            if completed_durations
+            else 0
+        )
+        avg_incomplete_duration = (
+            round(sum(incomplete_durations) / max(len(incomplete_durations), 1), 1)
+            if incomplete_durations
+            else 0
+        )
+
+        return jsonify({
+            "milestones": milestones,
+            "summary": {
+                "total_started": len(started_quiz),
+                "total_completed": len(completed),
+                "completion_rate": round(
+                    (len(completed) / max(len(started_quiz), 1)) * 100, 1
+                ),
+                "avg_completed_duration_seconds": avg_completed_duration,
+                "avg_incomplete_duration_seconds": avg_incomplete_duration,
+            },
+        })
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/sessions")
+@admin_required
+def admin_sessions(user):
+    page = max(1, int(request.args.get("page", 1)))
+    limit = max(5, min(100, int(request.args.get("limit", 25))))
+    search = str(request.args.get("search") or "").strip().lower()
+    device = str(request.args.get("device") or "").strip().lower()
+
+    db = get_session()
+    try:
+        q = db.query(AnalyticsSession, User).outerjoin(
+            User, AnalyticsSession.user_id == User.id
+        )
+
+        if device in ("desktop", "mobile", "tablet"):
+            q = q.filter(AnalyticsSession.device_type == device)
+
+        if search:
+            q = q.filter(
+                or_(
+                    AnalyticsSession.session_id.ilike(f"%{search}%"),
+                    AnalyticsSession.visitor_id.ilike(f"%{search}%"),
+                    AnalyticsSession.browser.ilike(f"%{search}%"),
+                    AnalyticsSession.os.ilike(f"%{search}%"),
+                    User.email.ilike(f"%{search}%"),
+                    User.name.ilike(f"%{search}%"),
+                )
+            )
+
+        total = q.count()
+        rows = (
+            q.order_by(AnalyticsSession.last_active_at.desc())
+            .offset((page - 1) * limit)
+            .limit(limit)
+            .all()
+        )
+
+        results = []
+        for sess, u in rows:
+            data = sess.to_dict()
+            data["user_email"] = u.email if u else None
+            data["user_name"] = u.name if u else None
+            data["is_pro"] = u.is_pro if u else False
+            results.append(data)
+
+        return jsonify({
+            "sessions": results,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": (total + limit - 1) // limit,
+        })
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/events")
+@admin_required
+def admin_events(user):
+    limit = max(10, min(200, int(request.args.get("limit", 50))))
+    event_type = request.args.get("event_type")
+
+    db = get_session()
+    try:
+        q = db.query(AnalyticsEvent, User).outerjoin(
+            User, AnalyticsEvent.user_id == User.id
+        )
+        if event_type:
+            q = q.filter(AnalyticsEvent.event_type == event_type)
+
+        rows = q.order_by(AnalyticsEvent.created_at.desc()).limit(limit).all()
+        results = []
+        for ev, u in rows:
+            data = ev.to_dict()
+            data["user_email"] = u.email if u else None
+            data["user_name"] = u.name if u else None
+            results.append(data)
+
+        return jsonify({"events": results})
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/seed-demo")
+@admin_required
+def admin_seed_demo(user):
+    """Seed realistic telemetry activity across past 14 days for previewing dashboard."""
+    import random
+    import uuid
+
+    db = get_session()
+    try:
+        now = datetime.now(timezone.utc)
+        browsers = ["Chrome", "Safari", "Edge", "Firefox"]
+        devices = ["desktop"] * 6 + ["mobile"] * 3 + ["tablet"] * 1
+        pages = ["/", "/quiz", "/results", "/hub", "/admissions", "/essayHelp"]
+
+        created_sessions = 0
+        for day_offset in range(13, -1, -1):
+            day_base = now - timedelta(days=day_offset)
+            # Create between 6 and 14 sessions per day
+            daily_count = random.randint(7, 13) + (3 if day_offset % 3 == 0 else 0)
+
+            for _ in range(daily_count):
+                sess_uuid = f"demo_{uuid.uuid4().hex[:12]}"
+                visitor_uuid = f"vis_{uuid.uuid4().hex[:10]}"
+                device = random.choice(devices)
+                os_choice = (
+                    "iOS" if device == "mobile" else "macOS" if random.random() > 0.4 else "Windows"
+                )
+                browser = random.choice(browsers)
+
+                hour = random.randint(0, 23)
+                minute = random.randint(0, 59)
+                start_dt = day_base.replace(hour=hour, minute=minute, second=random.randint(0, 59))
+
+                # Realistic quiz progression
+                reached_quiz = random.random() > 0.15
+                max_step = random.randint(1, 15) if reached_quiz else 0
+                completed = max_step >= 15 and random.random() > 0.25
+                if completed:
+                    max_step = 16
+
+                # Duration correlated with quiz depth
+                duration = random.randint(25, 90)
+                if max_step > 5:
+                    duration += random.randint(80, 240)
+                if completed:
+                    duration += random.randint(100, 360)
+
+                last_active = start_dt + timedelta(seconds=duration)
+                account_created = completed and random.random() > 0.55
+
+                sess = AnalyticsSession(
+                    session_id=sess_uuid,
+                    visitor_id=visitor_uuid,
+                    user_id=user.id if account_created and random.random() > 0.5 else None,
+                    device_type=device,
+                    browser=browser,
+                    os=os_choice,
+                    entry_page="/",
+                    started_at=start_dt,
+                    last_active_at=last_active,
+                    duration_seconds=duration,
+                    max_quiz_step=max_step,
+                    quiz_completed=completed,
+                    is_account_created=account_created,
+                    created_at=start_dt,
+                )
+                db.add(sess)
+
+                # Add sample events
+                db.add(
+                    AnalyticsEvent(
+                        session_id=sess_uuid,
+                        user_id=sess.user_id,
+                        event_type="page_view",
+                        page="/",
+                        properties={"title": "Landing"},
+                        created_at=start_dt,
+                    )
+                )
+                if reached_quiz:
+                    db.add(
+                        AnalyticsEvent(
+                            session_id=sess_uuid,
+                            user_id=sess.user_id,
+                            event_type="quiz_start",
+                            page="/quiz",
+                            properties={"total_questions": 15},
+                            created_at=start_dt + timedelta(seconds=15),
+                        )
+                    )
+                    db.add(
+                        AnalyticsEvent(
+                            session_id=sess_uuid,
+                            user_id=sess.user_id,
+                            event_type="quiz_step",
+                            page="/quiz",
+                            properties={"step": max_step, "section": "interests"},
+                            created_at=start_dt + timedelta(seconds=duration // 2),
+                        )
+                    )
+                if completed:
+                    db.add(
+                        AnalyticsEvent(
+                            session_id=sess_uuid,
+                            user_id=sess.user_id,
+                            event_type="quiz_complete",
+                            page="/quiz",
+                            properties={"total_questions": 15},
+                            created_at=last_active - timedelta(seconds=20),
+                        )
+                    )
+                if account_created:
+                    db.add(
+                        AnalyticsEvent(
+                            session_id=sess_uuid,
+                            user_id=sess.user_id,
+                            event_type="account_created",
+                            page="/results",
+                            properties={"method": "google"},
+                            created_at=last_active,
+                        )
+                    )
+                created_sessions += 1
+
+        db.commit()
+        return jsonify({"ok": True, "created_sessions": created_sessions})
+    finally:
+        db.close()
+
+
+@app.delete("/api/admin/demo-data")
+@admin_required
+def admin_delete_demo_data(user):
+    """Clean up demo seeded data."""
+    db = get_session()
+    try:
+        demo_sessions = (
+            db.query(AnalyticsSession)
+            .filter(AnalyticsSession.session_id.like("demo_%"))
+            .all()
+        )
+        demo_session_ids = [s.session_id for s in demo_sessions]
+
+        if demo_session_ids:
+            db.query(AnalyticsEvent).filter(
+                AnalyticsEvent.session_id.in_(demo_session_ids)
+            ).delete(synchronize_session=False)
+
+            for s in demo_sessions:
+                db.delete(s)
+
+        db.commit()
+        return jsonify({"ok": True, "deleted_sessions": len(demo_sessions)})
     finally:
         db.close()
 

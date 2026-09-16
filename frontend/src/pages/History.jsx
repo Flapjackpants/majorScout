@@ -23,6 +23,7 @@ export default function History({
   onStartQuiz,
   onOpenProFeatures,
   onAdmissions,
+  onAdmin,
   onNavigateLegal,
 }) {
   const [attempts, setAttempts] = useState(null)
@@ -55,6 +56,7 @@ export default function History({
         onRefreshUser={onRefreshUser}
         onOpenProFeatures={onOpenProFeatures}
         onAdmissions={onAdmissions}
+        onAdmin={onAdmin}
         rightSlot={
           <button
             onClick={onStartQuiz}

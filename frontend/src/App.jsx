@@ -8,7 +8,9 @@ import History from './pages/History.jsx'
 import Legal from './pages/Legal.jsx'
 import EssayHelp from './pages/EssayHelp.jsx'
 import Admissions from './pages/Admissions.jsx'
+import AdminDashboard from './pages/AdminDashboard.jsx'
 import UpgradeModal from './components/UpgradeModal.jsx'
+import { tracker } from './lib/tracker.js'
 
 function getInitialRoute() {
   const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/'
@@ -17,6 +19,7 @@ function getInitialRoute() {
   if (path === '/disclaimer') return { view: 'legal', tab: 'disclaimer' }
   if (path === '/legal') return { view: 'legal', tab: 'privacy' }
   if (path === '/admissions') return { view: 'admissions', tab: 'privacy' }
+  if (path === '/admin') return { view: 'admin', tab: 'privacy' }
   return { view: 'landing', tab: 'privacy' }
 }
 
@@ -38,6 +41,15 @@ export default function App() {
   const refreshUser = useCallback(() => {
     return fetchMe().then(setUser).catch(() => setUser(null))
   }, [])
+
+  useEffect(() => {
+    tracker.init()
+  }, [])
+
+  useEffect(() => {
+    const pagePath = view === 'landing' ? '/' : `/${view}`
+    tracker.trackPageView(pagePath, view)
+  }, [view])
 
   useEffect(() => {
     refreshUser()
@@ -175,10 +187,12 @@ export default function App() {
     }
 
     if (!authOk) return
+    tracker.trackLogin('google')
     refreshUser().then(async () => {
       const raw = sessionStorage.getItem('pendingQuiz')
       if (!raw) return
       try {
+        tracker.trackAccountCreated('google')
         const pending = JSON.parse(raw)
         sessionStorage.removeItem('pendingQuiz')
         const res = await api('/api/quiz/save', {
@@ -267,6 +281,14 @@ export default function App() {
     setView('admissions')
     if (window.location.pathname !== '/admissions') {
       window.history.pushState({ view: 'admissions' }, '', '/admissions')
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function goAdmin() {
+    setView('admin')
+    if (window.location.pathname !== '/admin') {
+      window.history.pushState({ view: 'admin' }, '', '/admin')
     }
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -444,6 +466,7 @@ export default function App() {
           onMyResults={goHistory}
           onAdmissions={goAdmissions}
           onOpenProFeatures={openProFeatures}
+          onAdmin={user?.is_admin ? goAdmin : undefined}
           onStart={startQuizFlow}
           onNavigateLegal={openLegal}
         />
@@ -488,6 +511,7 @@ export default function App() {
           onMyResults={user ? goHistory : undefined}
           onAdmissions={user ? goAdmissions : undefined}
           onEssayHelp={openEssayHelp}
+          onAdmin={user?.is_admin ? goAdmin : undefined}
           onRetake={() => {
             setResultsPayload(null)
             setStartSectionId(null)
@@ -510,6 +534,7 @@ export default function App() {
           onOpenAttempt={openAttempt}
           onOpenProFeatures={openProFeatures}
           onAdmissions={goAdmissions}
+          onAdmin={user?.is_admin ? goAdmin : undefined}
           onNavigateLegal={openLegal}
         />
       )}
@@ -535,6 +560,7 @@ export default function App() {
           }}
           onOpenProFeatures={openProFeatures}
           onAdmissions={goAdmissions}
+          onAdmin={user?.is_admin ? goAdmin : undefined}
           onNavigateLegal={openLegal}
         />
       )}
@@ -560,6 +586,7 @@ export default function App() {
             resetPathToRoot()
             openProFeatures(id)
           }}
+          onAdmin={user?.is_admin ? goAdmin : undefined}
           onNavigateLegal={openLegal}
         />
       )}
@@ -571,6 +598,19 @@ export default function App() {
           onRefreshUser={refreshUser}
           onHome={goHome}
           onStartQuiz={startQuizFlow}
+          onAdmin={user?.is_admin ? goAdmin : undefined}
+          onNavigateLegal={openLegal}
+        />
+      )}
+
+      {view === 'admin' && (
+        <AdminDashboard
+          user={user}
+          onHome={goHome}
+          onRefreshUser={refreshUser}
+          onStartQuiz={startQuizFlow}
+          onAdmissions={goAdmissions}
+          onOpenProFeatures={openProFeatures}
           onNavigateLegal={openLegal}
         />
       )}

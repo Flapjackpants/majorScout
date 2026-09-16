@@ -78,6 +78,7 @@ export default function Landing({
   onMyResults,
   onAdmissions,
   onOpenProFeatures,
+  onAdmin,
   onNavigateLegal,
 }) {
   const [stats, setStats] = useState(null)
@@ -107,6 +108,7 @@ export default function Landing({
         onMyResults={user ? onMyResults : undefined}
         onAdmissions={user ? onAdmissions : undefined}
         onOpenProFeatures={onOpenProFeatures}
+        onAdmin={onAdmin}
         rightSlot={
           <button
             onClick={onStart}

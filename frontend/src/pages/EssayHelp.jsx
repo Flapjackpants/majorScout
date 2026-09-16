@@ -335,6 +335,7 @@ export default function EssayHelp({
   onProfileSaved,
   onOpenProFeatures,
   onAdmissions,
+  onAdmin,
   onNavigateLegal,
 }) {
   const attemptId = payload?.attemptId
@@ -471,6 +472,7 @@ export default function EssayHelp({
         onHome={onHome}
         onRefreshUser={onRefreshUser}
         onOpenProFeatures={onOpenProFeatures}
+        onAdmin={onAdmin}
         rightSlot={
           <div className="flex items-center gap-2">
             {onAdmissions && user && (

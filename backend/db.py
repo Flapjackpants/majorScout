@@ -198,6 +198,96 @@ class AdmissionResult(Base):
         }
 
 
+class AnalyticsSession(Base):
+    """Tracks a user session on the site, duration, and milestone progress."""
+
+    __tablename__ = "analytics_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    visitor_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    device_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # desktop, mobile, tablet
+    browser: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    os: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entry_page: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    max_quiz_step: Mapped[int] = mapped_column(Integer, default=0)
+    quiz_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_account_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "visitor_id": self.visitor_id,
+            "user_id": self.user_id,
+            "device_type": self.device_type,
+            "browser": self.browser,
+            "os": self.os,
+            "entry_page": self.entry_page,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "last_active_at": self.last_active_at.isoformat() if self.last_active_at else None,
+            "duration_seconds": self.duration_seconds,
+            "max_quiz_step": self.max_quiz_step,
+            "quiz_completed": self.quiz_completed,
+            "is_account_created": self.is_account_created,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AnalyticsEvent(Base):
+    """Tracks discrete user interaction events across the site."""
+
+    __tablename__ = "analytics_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    page: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    properties_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+    @property
+    def properties(self) -> dict:
+        try:
+            return json.loads(self.properties_json or "{}")
+        except Exception:
+            return {}
+
+    @properties.setter
+    def properties(self, value: dict) -> None:
+        self.properties_json = json.dumps(value) if value is not None else "{}"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "user_id": self.user_id,
+            "event_type": self.event_type,
+            "page": self.page,
+            "properties": self.properties,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+
 def _build_engine():
     import sys
 

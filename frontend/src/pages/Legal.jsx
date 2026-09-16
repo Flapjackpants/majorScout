@@ -8,6 +8,7 @@ export default function Legal({
   onRefreshUser,
   onHome,
   onStartQuiz,
+  onAdmin,
   onNavigateLegal,
 }) {
   const [activeTab, setActiveTab] = useState(initialTab)
@@ -33,6 +34,7 @@ export default function Legal({
         user={user}
         onHome={onHome}
         onRefreshUser={onRefreshUser}
+        onAdmin={onAdmin}
         rightSlot={
           <button
             onClick={onStartQuiz}

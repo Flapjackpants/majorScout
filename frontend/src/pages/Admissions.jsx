@@ -269,6 +269,7 @@ export default function Admissions({
   onStartQuiz,
   onMyResults,
   onOpenProFeatures,
+  onAdmin,
   onNavigateLegal,
 }) {
   const [rows, setRows] = useState(null)
@@ -358,6 +359,7 @@ export default function Admissions({
         onRefreshUser={onRefreshUser}
         onMyResults={onMyResults}
         onOpenProFeatures={onOpenProFeatures}
+        onAdmin={onAdmin}
         rightSlot={
           <button
             onClick={onStartQuiz}

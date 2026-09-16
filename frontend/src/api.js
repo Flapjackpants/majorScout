@@ -203,3 +203,43 @@ export async function deleteAdmission(id) {
   const res = await api(`/api/admissions/${id}`, { method: 'DELETE' })
   return jsonOrThrow(res, 'Could not delete result')
 }
+
+// ── Admin Dashboard & Analytics ─────────────────────────────────────────────
+
+export async function fetchAdminMetrics(range = '7d') {
+  const res = await api(`/api/admin/metrics?range=${encodeURIComponent(range)}`)
+  return jsonOrThrow(res, 'Could not load admin metrics')
+}
+
+export async function fetchAdminFunnel(range = '7d') {
+  const res = await api(`/api/admin/funnel?range=${encodeURIComponent(range)}`)
+  return jsonOrThrow(res, 'Could not load quiz funnel data')
+}
+
+export async function fetchAdminSessions({ page = 1, limit = 25, search = '', device = '' } = {}) {
+  const params = new URLSearchParams()
+  params.set('page', page)
+  params.set('limit', limit)
+  if (search) params.set('search', search)
+  if (device) params.set('device', device)
+  const res = await api(`/api/admin/sessions?${params.toString()}`)
+  return jsonOrThrow(res, 'Could not load sessions')
+}
+
+export async function fetchAdminEvents({ limit = 50, eventType = '' } = {}) {
+  const params = new URLSearchParams()
+  params.set('limit', limit)
+  if (eventType) params.set('event_type', eventType)
+  const res = await api(`/api/admin/events?${params.toString()}`)
+  return jsonOrThrow(res, 'Could not load analytics events')
+}
+
+export async function seedAdminDemo() {
+  const res = await api('/api/admin/seed-demo', { method: 'POST', body: '{}' })
+  return jsonOrThrow(res, 'Could not seed demo data')
+}
+
+export async function deleteAdminDemo() {
+  const res = await api('/api/admin/demo-data', { method: 'DELETE' })
+  return jsonOrThrow(res, 'Could not delete demo data')
+}
