@@ -669,6 +669,27 @@ def billing_verify_session():
         if not u:
             return jsonify({"error": "User not found."}), 404
 
+        # Enforce session ownership before establishing login session
+        if session_obj:
+            meta = session_obj.get("metadata") or {}
+            session_uid = meta.get("user_id") or session_obj.get("client_reference_id")
+            if session_uid and str(session_uid) != str(u.id):
+                return jsonify({
+                    "success": False,
+                    "status": "forbidden",
+                    "error": "This checkout session belongs to a different account.",
+                    "message": "Checkout session does not match your account.",
+                }), 403
+
+            customer_id = _stripe_id(session_obj.get("customer"))
+            if customer_id and u.stripe_customer_id and customer_id != u.stripe_customer_id:
+                return jsonify({
+                    "success": False,
+                    "status": "forbidden",
+                    "error": "This checkout session belongs to a different customer.",
+                    "message": "Checkout session does not match your account.",
+                }), 403
+
         # Maintain session login for the returning user
         session["user_id"] = u.id
 
@@ -679,24 +700,16 @@ def billing_verify_session():
             customer_id = _stripe_id(session_obj.get("customer"))
 
             is_paid = session_obj.get("payment_status") == "paid"
-            is_complete = session_status == "complete"
 
-            if is_paid or is_complete:
+            if is_paid:
                 target_attempt = None
                 if target_attempt_id:
                     try:
                         target_attempt = db.get(QuizAttempt, int(target_attempt_id))
                     except (ValueError, TypeError):
                         target_attempt = None
-                    if target_attempt and target_attempt.user_id == u.id:
-                        target_attempt.unlocked = True
-                        target_attempt.unlocked_at = datetime.now(timezone.utc)
-                        target_attempt.stripe_checkout_session_id = session_obj.get("id")
-
-                u.subscription_status = "pro"
-                if customer_id and not u.stripe_customer_id:
-                    u.stripe_customer_id = customer_id
-                db.commit()
+                    if target_attempt and target_attempt.user_id != u.id:
+                        target_attempt = None
 
                 if not target_attempt:
                     target_attempt = (
@@ -705,6 +718,17 @@ def billing_verify_session():
                         .order_by(QuizAttempt.created_at.desc())
                         .first()
                     )
+
+                if target_attempt and target_attempt.user_id == u.id:
+                    target_attempt.unlocked = True
+                    if not target_attempt.unlocked_at:
+                        target_attempt.unlocked_at = datetime.now(timezone.utc)
+                    target_attempt.stripe_checkout_session_id = session_obj.get("id")
+
+                u.subscription_status = "pro"
+                if customer_id and not u.stripe_customer_id:
+                    u.stripe_customer_id = customer_id
+                db.commit()
 
                 u._has_unlocked = True
                 return jsonify({
@@ -725,7 +749,16 @@ def billing_verify_session():
             if last_err is not None and not isinstance(last_err, dict):
                 last_err = _stripe_to_dict(last_err)
 
-            if pi_status == "processing":
+            if session_status == "expired":
+                return jsonify({
+                    "success": False,
+                    "status": "expired",
+                    "error": "The payment session expired.",
+                    "message": "The checkout session timed out before payment was completed.",
+                    "attempt_id": target_attempt_id,
+                })
+
+            if pi_status == "processing" or (session_status == "complete" and not is_paid):
                 return jsonify({
                     "success": False,
                     "status": "processing",
@@ -742,15 +775,6 @@ def billing_verify_session():
                     "status": "failed",
                     "error": full_msg,
                     "message": f"Payment failed: {full_msg}",
-                    "attempt_id": target_attempt_id,
-                })
-
-            if session_status == "expired":
-                return jsonify({
-                    "success": False,
-                    "status": "expired",
-                    "error": "The payment session expired.",
-                    "message": "The checkout session timed out before payment was completed.",
                     "attempt_id": target_attempt_id,
                 })
 
@@ -815,7 +839,13 @@ def billing_webhook():
     etype = event["type"]
     data = _stripe_to_dict(event["data"]["object"])
 
-    if etype != "checkout.session.completed":
+    HANDLED_EVENTS = (
+        "checkout.session.completed",
+        "checkout.session.async_payment_succeeded",
+        "checkout.session.async_payment_failed",
+        "checkout.session.expired",
+    )
+    if etype not in HANDLED_EVENTS:
         return jsonify({"ok": True})
 
     db = get_session()
@@ -825,26 +855,104 @@ def billing_webhook():
         user_id = meta.get("user_id") or data.get("client_reference_id")
         customer_id = _stripe_id(data.get("customer"))
         session_id = data.get("id")
+        payment_status = data.get("payment_status")
 
-        if attempt_id:
-            attempt = db.get(QuizAttempt, int(attempt_id))
-            if attempt and (not user_id or attempt.user_id == int(user_id)):
-                attempt.unlocked = True
-                attempt.unlocked_at = datetime.now(timezone.utc)
-                attempt.stripe_checkout_session_id = session_id
-                u = db.get(User, attempt.user_id)
+        # 1. Success events: completed with payment, or async payment succeeded
+        if (
+            (etype == "checkout.session.completed" and payment_status in ("paid", "no_payment_required"))
+            or etype == "checkout.session.async_payment_succeeded"
+        ):
+            target_attempt = None
+            if attempt_id:
+                try:
+                    target_attempt = db.get(QuizAttempt, int(attempt_id))
+                except (ValueError, TypeError):
+                    target_attempt = None
+
+            parsed_uid = None
+            if user_id:
+                try:
+                    parsed_uid = int(user_id)
+                except (ValueError, TypeError):
+                    parsed_uid = None
+
+            if target_attempt and (not parsed_uid or target_attempt.user_id == parsed_uid):
+                target_attempt.unlocked = True
+                if not target_attempt.unlocked_at:
+                    target_attempt.unlocked_at = datetime.now(timezone.utc)
+                target_attempt.stripe_checkout_session_id = session_id
+                u = db.get(User, target_attempt.user_id)
                 if u:
                     u.subscription_status = "pro"
                     if customer_id and not u.stripe_customer_id:
                         u.stripe_customer_id = customer_id
                 db.commit()
-        elif user_id:
-            u = db.get(User, int(user_id))
-            if u:
-                u.subscription_status = "pro"
-                if customer_id and not u.stripe_customer_id:
-                    u.stripe_customer_id = customer_id
-                db.commit()
+            elif parsed_uid:
+                u = db.get(User, parsed_uid)
+                if u:
+                    latest = (
+                        db.query(QuizAttempt)
+                        .filter(QuizAttempt.user_id == u.id)
+                        .order_by(QuizAttempt.created_at.desc())
+                        .first()
+                    )
+                    if latest:
+                        latest.unlocked = True
+                        if not latest.unlocked_at:
+                            latest.unlocked_at = datetime.now(timezone.utc)
+                        latest.stripe_checkout_session_id = session_id
+
+                    u.subscription_status = "pro"
+                    if customer_id and not u.stripe_customer_id:
+                        u.stripe_customer_id = customer_id
+                    db.commit()
+
+        # 2. Failure/expired events: async payment failed or checkout session timed out
+        elif etype in ("checkout.session.async_payment_failed", "checkout.session.expired"):
+            attempts_to_relock = []
+            if session_id:
+                matched = (
+                    db.query(QuizAttempt)
+                    .filter(QuizAttempt.stripe_checkout_session_id == session_id)
+                    .all()
+                )
+                attempts_to_relock.extend(matched)
+
+            if attempt_id:
+                try:
+                    att = db.get(QuizAttempt, int(attempt_id))
+                    if att and att not in attempts_to_relock:
+                        if att.stripe_checkout_session_id == session_id or not att.stripe_checkout_session_id:
+                            attempts_to_relock.append(att)
+                except (ValueError, TypeError):
+                    pass
+
+            affected_user_ids = set()
+            for att in attempts_to_relock:
+                att.unlocked = False
+                att.unlocked_at = None
+                att.stripe_checkout_session_id = None
+                affected_user_ids.add(att.user_id)
+
+            if user_id:
+                try:
+                    affected_user_ids.add(int(user_id))
+                except (ValueError, TypeError):
+                    pass
+
+            for uid in affected_user_ids:
+                u = db.get(User, uid)
+                if not u or u.is_admin:
+                    continue
+                has_other_unlocked = (
+                    db.query(QuizAttempt.id)
+                    .filter(QuizAttempt.user_id == uid, QuizAttempt.unlocked == True)
+                    .first()
+                    is not None
+                )
+                if not has_other_unlocked:
+                    u.subscription_status = None
+            db.commit()
     finally:
         db.close()
 
