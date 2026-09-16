@@ -349,9 +349,6 @@ export default function App() {
         >
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
-              <span className="text-base">
-                {billingNotice.type === 'success' ? '⚡' : billingNotice.type === 'error' ? '⚠️' : 'ℹ️'}
-              </span>
               <div>
                 <span className="font-bold">{billingNotice.title}: </span>
                 <span>{billingNotice.message}</span>
@@ -366,7 +363,7 @@ export default function App() {
                   onClick={() => openProFeatures(billingNotice.attemptId)}
                   className="rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 px-3.5 py-1 text-xs font-black uppercase tracking-wide text-slate-950 shadow-sm transition hover:scale-105"
                 >
-                  ✨ View PRO+ Features & Essay Help
+                  View PRO+ Features & Essay Help
                 </button>
               )}
               {billingNotice.type === 'error' && (
@@ -392,8 +389,8 @@ export default function App() {
       {proCelebration?.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-md">
           <div className="animate-fade-up w-full max-w-lg rounded-3xl border border-amber-400/40 bg-gradient-to-b from-slate-900 to-slate-950 p-7 text-center shadow-2xl shadow-amber-500/20">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 text-3xl shadow-lg shadow-amber-400/30">
-              ⚡
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/30">
+              PRO+
             </div>
             <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-amber-300">
               Payment Confirmed
@@ -437,7 +434,7 @@ export default function App() {
               }}
               className="w-full rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-4 text-base font-black uppercase tracking-wide text-slate-950 shadow-xl shadow-amber-400/30 transition hover:scale-[1.02] hover:shadow-amber-400/50"
             >
-              ✨ Access PRO+ Features & Essay Help →
+              Access PRO+ Features & Essay Help →
             </button>
 
             <button

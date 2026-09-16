@@ -61,7 +61,7 @@ function LockedCard({ rank, matchPercent, onUnlock, featured }) {
       <div className="pointer-events-none absolute inset-0 backdrop-blur-[2px]" />
       <div className="relative">
         <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
-          <span>⚡</span> {rank === 1 ? 'PRO+ #1 Match — Locked' : `PRO+ Match #${rank} — Locked`}
+          {rank === 1 ? 'PRO+ #1 Match — Locked' : `PRO+ Match #${rank} — Locked`}
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -113,7 +113,7 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock, on
     >
       {featured && (
         <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
-          <span>⚡</span> PRO+ Best Match
+          PRO+ Best Match
         </div>
       )}
       <div className="flex items-start justify-between gap-4">
@@ -203,7 +203,7 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock, on
           onClick={() => onEssayHelp?.(program)}
           className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-5 py-2.5 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition hover:scale-[1.02] hover:shadow-amber-400/30"
         >
-          <span>📝</span> Essay help for {program.university}
+          Essay help for {program.university}
         </button>
       ) : (
         !featured &&
@@ -212,7 +212,7 @@ function ProgramCard({ program, rank, featured, guidance, unlocked, onUnlock, on
             onClick={onUnlock}
             className="mt-4 flex items-center gap-1 text-xs font-bold text-amber-300 underline-offset-2 hover:underline"
           >
-            <span>⚡</span> Unlock PRO+ essay help &amp; grading for this school
+            Unlock PRO+ essay help &amp; grading for this school
           </button>
         )
       )}
@@ -315,7 +315,7 @@ export default function Results({
         <div className="flex items-center gap-3">
           {unlocked && (
             <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
-              <span>⚡</span> PRO+
+              PRO+
             </span>
           )}
           {user?.is_admin && onAdmin && (
@@ -325,12 +325,12 @@ export default function Results({
               className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/40 bg-sky-500/15 px-3.5 py-1.5 text-xs font-bold text-sky-200 shadow-sm transition hover:scale-105 hover:bg-sky-500/25 hover:border-sky-400"
               title="Open Admin Analytics Dashboard"
             >
-              <svg className="h-3.5 w-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="h-3.5 w-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="18" y1="20" x2="18" y2="10" />
                 <line x1="12" y1="20" x2="12" y2="4" />
                 <line x1="6" y1="20" x2="6" y2="14" />
               </svg>
-              <span className="hidden sm:inline">Admin</span> Dashboard
+              Admin
             </button>
           )}
           {user && (
@@ -413,7 +413,7 @@ export default function Results({
               onClick={scrollToEssayGuidance}
               className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-amber-400/25 transition hover:scale-105"
             >
-              <span>📝</span> Jump to PRO+ Essay Help & Guides
+              Jump to PRO+ Essay Help & Guides
             </button>
           </div>
         )}

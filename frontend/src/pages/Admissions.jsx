@@ -10,9 +10,9 @@ const ROUNDS = [
 ]
 
 const DECISIONS = [
-  { id: 'accepted', label: 'Accepted', tone: 'emerald', emoji: '🎉' },
-  { id: 'waitlisted', label: 'Waitlisted', tone: 'amber', emoji: '⏳' },
-  { id: 'denied', label: 'Denied', tone: 'rose', emoji: '✕' },
+  { id: 'accepted', label: 'Accepted', tone: 'emerald' },
+  { id: 'waitlisted', label: 'Waitlisted', tone: 'amber' },
+  { id: 'denied', label: 'Denied', tone: 'rose' },
 ]
 
 const TONE = {
@@ -252,7 +252,6 @@ function Segmented({ options, value, onChange, toneFor }) {
               on ? tone : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/30'
             }`}
           >
-            {opt.emoji ? <span className="mr-1.5">{opt.emoji}</span> : null}
             <span className="hidden sm:inline">{opt.label}</span>
             <span className="sm:hidden">{opt.short || opt.label}</span>
           </button>

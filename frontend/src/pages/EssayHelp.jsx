@@ -128,7 +128,7 @@ function ProfileSummary({ answers, onEdit }) {
               key={aw.id || i}
               className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs text-amber-100"
             >
-              🏅 {aw.title}
+              {aw.title}
               <span className="ml-1 text-amber-300/70">{labelFor(AWARD_LEVELS, aw.level)}</span>
             </li>
           ))}
@@ -200,7 +200,7 @@ function ProfileStep({ payload, onSaved, onCancel, canCancel }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950">
-            <span>⚡</span> Complete your PRO+ profile
+            Complete your PRO+ profile
           </div>
           <h2 className="mt-3 text-xl font-black text-white">Tell the AI about you</h2>
           <p className="mt-1 max-w-xl text-sm text-slate-400">
@@ -496,7 +496,7 @@ export default function EssayHelp({
       <main className={`mx-auto max-w-6xl px-6 pb-24 pt-4 ${unlocked ? '' : 'pointer-events-none select-none blur-sm'}`}>
         <div className="animate-fade-up">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
-            <span>📝</span> PRO+ Essay Help
+            PRO+ Essay Help
           </div>
           <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
             Essays for <span className="bg-gradient-to-r from-sky-300 to-violet-300 bg-clip-text text-transparent">{university}</span>

@@ -117,7 +117,7 @@ export default function History({
                             : 'bg-slate-500/20 text-slate-400'
                         }`}
                       >
-                        {a.unlocked ? '⚡ PRO+' : 'Free'}
+                        {a.unlocked ? 'PRO+' : 'Free'}
                       </span>
                       <span className="text-xs text-slate-500">{formatDate(a.created_at)}</span>
                     </div>

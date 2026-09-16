@@ -54,16 +54,17 @@ function CurvedTrendMini({ data = [], width = 240, height = 70, stroke = '#38bdf
   const min = Math.min(...values)
   const max = Math.max(...values, min + 1)
   const paddingX = 8
-  const paddingY = 8
+  const paddingY = 12
 
   const points = values.map((val, i) => {
     const x = paddingX + (i / Math.max(values.length - 1, 1)) * (width - paddingX * 2)
     const y = height - paddingY - ((val - min) / (max - min)) * (height - paddingY * 2)
-    return { x, y }
+    return { x, y, val }
   })
 
   const linePath = createSmoothPath(points)
   const areaPath = createSmoothPath(points, true, height)
+  const last = points[points.length - 1]
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
@@ -78,6 +79,16 @@ function CurvedTrendMini({ data = [], width = 240, height = 70, stroke = '#38bdf
       {points.map((p, idx) => (
         <circle key={idx} cx={p.x} cy={p.y} r="2.5" fill={stroke} className="opacity-70 hover:opacity-100 transition" />
       ))}
+      {last && (
+        <text
+          x={Math.min(last.x, width - 4)}
+          y={Math.max(10, last.y - 6)}
+          textAnchor="end"
+          className="fill-slate-300 text-[10px] font-bold"
+        >
+          {last.val}
+        </text>
+      )}
     </svg>
   )
 }
@@ -105,15 +116,17 @@ function MultiLayerAreaChart({ data = [], height = 180 }) {
     10
   )
 
-  const padX = 20
+  const padLeft = 36
+  const padRight = 12
   const padBottom = 26
   const padTop = 15
   const usableHeight = height - padBottom - padTop
+  const plotWidth = chartWidth - padLeft - padRight
 
   const getPoints = (key) =>
     series.map((item, i) => {
       const val = item[key] || 0
-      const x = padX + (i / Math.max(series.length - 1, 1)) * (chartWidth - padX * 2)
+      const x = padLeft + (i / Math.max(series.length - 1, 1)) * plotWidth
       const y = height - padBottom - (val / maxVal) * usableHeight
       return { x, y }
     })
@@ -121,6 +134,23 @@ function MultiLayerAreaChart({ data = [], height = 180 }) {
   const ptsSessions = getPoints('active_sessions')
   const ptsQuiz = getPoints('quiz_activity')
   const ptsCompletes = getPoints('quiz_completed')
+
+  const yTickRatios = [0, 0.5, 1]
+  const labelStep = series.length > 12 ? Math.ceil(series.length / 8) : 1
+
+  function formatXLabel(label) {
+    if (typeof label === 'string' && label.includes(':')) {
+      const hour = label.split(':')[0]
+      return String(Number(hour))
+    }
+    return label
+  }
+
+  function shouldShowXLabel(idx) {
+    if (series.length <= 12) return true
+    if (idx === 0 || idx === series.length - 1) return true
+    return idx % labelStep === 0
+  }
 
   return (
     <div className="relative w-full">
@@ -140,21 +170,31 @@ function MultiLayerAreaChart({ data = [], height = 180 }) {
           </linearGradient>
         </defs>
 
-        {/* Subtle grid lines */}
-        {[0.25, 0.5, 0.75, 1].map((ratio) => {
+        {/* Subtle grid lines + Y-axis labels */}
+        {yTickRatios.map((ratio) => {
           const y = height - padBottom - usableHeight * ratio
+          const value = Math.round(maxVal * ratio)
           return (
-            <line
-              key={ratio}
-              x1={padX}
-              y1={y}
-              x2={chartWidth - padX}
-              y2={y}
-              stroke="currentColor"
-              className="text-slate-200 dark:text-slate-800"
-              strokeDasharray="4 4"
-              strokeWidth="0.8"
-            />
+            <g key={ratio}>
+              <line
+                x1={padLeft}
+                y1={y}
+                x2={chartWidth - padRight}
+                y2={y}
+                stroke="currentColor"
+                className="text-slate-800"
+                strokeDasharray="4 4"
+                strokeWidth="0.8"
+              />
+              <text
+                x={padLeft - 6}
+                y={y + 3}
+                textAnchor="end"
+                className="fill-slate-500 text-[9px] font-semibold"
+              >
+                {value}
+              </text>
+            </g>
           )
         })}
 
@@ -188,18 +228,19 @@ function MultiLayerAreaChart({ data = [], height = 180 }) {
           strokeLinecap="round"
         />
 
-        {/* X-axis ticks */}
+        {/* X-axis ticks (thinned when dense, e.g. Today hourly) */}
         {series.map((item, idx) => {
-          const x = padX + (idx / Math.max(series.length - 1, 1)) * (chartWidth - padX * 2)
+          if (!shouldShowXLabel(idx)) return null
+          const x = padLeft + (idx / Math.max(series.length - 1, 1)) * plotWidth
           return (
             <text
               key={idx}
               x={x}
               y={height - 8}
               textAnchor="middle"
-              className="fill-slate-400 dark:fill-slate-500 text-[10px] font-semibold tracking-wider uppercase"
+              className="fill-slate-500 text-[10px] font-semibold tracking-wider uppercase"
             >
-              {item.label}
+              {formatXLabel(item.label)}
             </text>
           )
         })}
@@ -262,7 +303,7 @@ function RadarSpiderChart({ data = [], size = 200 }) {
               points={hexPts}
               fill="none"
               stroke="currentColor"
-              className="text-slate-200 dark:text-slate-800"
+              className="text-slate-800"
               strokeWidth="0.8"
             />
           )
@@ -280,7 +321,7 @@ function RadarSpiderChart({ data = [], size = 200 }) {
               x2={pt.x}
               y2={pt.y}
               stroke="currentColor"
-              className="text-slate-200 dark:text-slate-800"
+              className="text-slate-800"
               strokeWidth="0.8"
             />
           )
@@ -315,7 +356,7 @@ function RadarSpiderChart({ data = [], size = 200 }) {
               x={pt.x}
               y={pt.y + 3}
               textAnchor="middle"
-              className="fill-slate-500 dark:fill-slate-400 text-[9px] font-bold tracking-tight uppercase"
+              className="fill-slate-400 text-[9px] font-bold tracking-tight uppercase"
             >
               {dim.dimension}
             </text>
@@ -351,7 +392,7 @@ function DonutSegmentChart({ data = {}, size = 110 }) {
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox="0 0 100 100" className="-rotate-90">
-        <circle cx="50" cy="50" r={radius} fill="none" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="12" />
+        <circle cx="50" cy="50" r={radius} fill="none" stroke="currentColor" className="text-slate-800" strokeWidth="12" />
         {/* Guests Segment (Blue) */}
         <circle
           cx="50"
@@ -387,7 +428,7 @@ function DonutSegmentChart({ data = {}, size = 110 }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-xs font-black text-slate-800 dark:text-white">{total}</span>
+        <span className="text-xs font-black text-white">{total}</span>
         <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Users</span>
       </div>
     </div>
@@ -432,7 +473,6 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
   const [funnel, setFunnel] = useState(null)
   const [sessionsData, setSessionsData] = useState({ sessions: [], total: 0, page: 1, pages: 1 })
   const [eventsData, setEventsData] = useState([])
-  const [isDarkMode, setIsDarkMode] = useState(false)
 
   const loadAllData = useCallback(async () => {
     if (!user?.is_admin) return
@@ -482,8 +522,11 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
   if (!user || !user.is_admin) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-center text-white">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/10 text-3xl text-rose-400 border border-rose-500/20">
-          🔒
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
         </div>
         <h1 className="mt-4 text-2xl font-black">Admin Access Required</h1>
         <p className="mt-2 max-w-md text-sm text-slate-400 leading-relaxed">
@@ -527,57 +570,44 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
     tablet: { count: 0, percent: 0 },
   }
 
-  const themeClasses = isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-[#f4f7fb] text-slate-800'
-  const cardClasses = isDarkMode
-    ? 'rounded-2xl border border-white/10 bg-slate-900 shadow-xl shadow-black/20 p-5'
-    : 'rounded-2xl border border-slate-200/90 bg-white shadow-sm p-5'
+  const cardClasses = 'rounded-2xl border border-white/10 bg-slate-900 shadow-xl shadow-black/20 p-5'
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${themeClasses}`}>
-      <div className="mx-auto flex max-w-[1520px] flex-col lg:flex-row min-h-screen">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="flex w-full min-h-screen flex-col lg:flex-row">
         {/* ── Sidebar (Left Navigation) ─────────────────────────────────── */}
-        <aside className="w-full lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col justify-between">
+        <aside className="w-full lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900 p-5 flex flex-col justify-between">
           <div>
             {/* Brand Logo & Name */}
-            <div className="flex items-center justify-between pb-6 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-black text-sm shadow-md shadow-sky-500/30">
-                  MS
-                </div>
-                <div>
-                  <div className="text-sm font-black tracking-tight text-slate-900 dark:text-white">MajorScout</div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-sky-500">Telemetry Admin</div>
-                </div>
+            <div className="flex items-center gap-2.5 pb-6 border-b border-slate-800">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-black text-sm shadow-md shadow-sky-500/30">
+                MS
               </div>
-              <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white transition"
-                title={isDarkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-              >
-                {isDarkMode ? '☀️' : '🌙'}
-              </button>
+              <div>
+                <div className="text-sm font-black tracking-tight text-white">MajorScout</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-sky-500">Telemetry Admin</div>
+              </div>
             </div>
 
             {/* Navigation Menu */}
             <nav className="mt-6 space-y-1">
               {[
-                { id: 'overview', label: 'OVERVIEW', icon: '📊' },
-                { id: 'funnel', label: 'QUIZ FUNNEL', icon: '🎯' },
-                { id: 'sessions', label: 'USER SESSIONS', icon: '⏱️' },
-                { id: 'events', label: 'LIVE EVENTS', icon: '⚡' },
+                { id: 'overview', label: 'OVERVIEW' },
+                { id: 'funnel', label: 'QUIZ FUNNEL' },
+                { id: 'sessions', label: 'USER SESSIONS' },
+                { id: 'events', label: 'LIVE EVENTS' },
               ].map((item) => {
                 const isActive = tab === item.id
                 return (
                   <button
                     key={item.id}
                     onClick={() => setTab(item.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-xs font-black tracking-wider transition ${
+                    className={`flex w-full items-center rounded-xl px-4 py-2.5 text-xs font-black tracking-wider transition ${
                       isActive
-                        ? 'bg-sky-50 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300 shadow-sm'
-                        : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
+                        ? 'bg-sky-500/15 text-sky-300 shadow-sm'
+                        : 'text-slate-500 hover:bg-slate-800/60 hover:text-white'
                     }`}
                   >
-                    <span className="text-sm">{item.icon}</span>
                     <span>{item.label}</span>
                   </button>
                 )
@@ -591,28 +621,28 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                 </span>
-                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                <span className="text-xs font-bold text-emerald-300">
                   {kpi.active_now} Active On Site
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
+              <p className="mt-1 text-[11px] text-emerald-400/80">
                 Tracking heartbeat &amp; active steps
               </p>
             </div>
           </div>
 
           {/* Sidebar Footer Controls */}
-          <div className="pt-6 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
+          <div className="pt-6 border-t border-slate-800 space-y-2.5">
             <div className="flex items-center gap-2 px-1">
               {user.picture ? (
-                <img src={user.picture} alt="" className="h-7 w-7 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+                <img src={user.picture} alt="" className="h-7 w-7 rounded-full object-cover border border-slate-700" />
               ) : (
                 <div className="h-7 w-7 rounded-full bg-sky-500/20 text-sky-500 font-bold flex items-center justify-center text-xs">
                   {user.email[0].toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1 text-left">
-                <div className="text-xs font-bold truncate text-slate-800 dark:text-white">{user.name || 'Admin'}</div>
+                <div className="text-xs font-bold truncate text-white">{user.name || 'Admin'}</div>
                 <div className="text-[10px] text-slate-400 truncate">{user.email}</div>
               </div>
             </div>
@@ -621,14 +651,14 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
               <button
                 onClick={handleSeedDemo}
                 disabled={seeding}
-                className="flex-1 rounded-lg border border-sky-400/40 bg-sky-500/10 px-2 py-1.5 text-[11px] font-bold text-sky-600 dark:text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 transition"
+                className="flex-1 rounded-lg border border-sky-400/40 bg-sky-500/10 px-2 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 transition"
               >
                 {seeding ? 'Seeding…' : 'Seed Demo Data'}
               </button>
               <button
                 onClick={handleDeleteDemo}
                 disabled={seeding}
-                className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition"
+                className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition"
                 title="Clear demo data"
               >
                 Clear
@@ -637,7 +667,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
 
             <button
               onClick={onHome}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800 transition"
             >
               <span>←</span> Return to Site
             </button>
@@ -649,18 +679,18 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
           {/* Top Header & Range Filters */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+              <h1 className="text-2xl font-black tracking-tight text-white">
                 {tab === 'overview' && 'Activity & Performance Overview'}
                 {tab === 'funnel' && 'Quiz Progression & Drop-off Funnel'}
                 {tab === 'sessions' && 'Active & Historic User Sessions'}
                 {tab === 'events' && 'Real-time Telemetry Event Stream'}
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Real-time site telemetry across quiz completion, signups, and session duration.
               </p>
             </div>
 
-            <div className="flex items-center gap-2 bg-slate-200/70 dark:bg-slate-800/80 p-1 rounded-xl">
+            <div className="flex items-center gap-2 bg-slate-800/80 p-1 rounded-xl">
               {[
                 { id: 'today', label: 'Today' },
                 { id: '7d', label: '7 Days' },
@@ -672,8 +702,8 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                   onClick={() => setRange(r.id)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                     range === r.id
-                      ? 'bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-300 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-slate-900 text-sky-300 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   {r.label}
@@ -682,10 +712,14 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
               <button
                 onClick={loadAllData}
                 disabled={loading}
-                className="p-1.5 text-xs text-slate-500 hover:text-sky-500 transition"
+                className="p-1.5 text-xs text-slate-500 hover:text-sky-400 transition disabled:opacity-50"
                 title="Refresh Metrics"
               >
-                🔄
+                <svg className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="23 4 23 10 17 10" />
+                  <polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
               </button>
             </div>
           </div>
@@ -702,14 +736,14 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                     <span
                       className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${
                         kpi.visitors_change >= 0
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-rose-500/10 text-rose-400'
                       }`}
                     >
                       {kpi.visitors_change >= 0 ? `+${kpi.visitors_change}%` : `${kpi.visitors_change}%`}
                     </span>
                   </div>
-                  <div className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                  <div className="mt-2 text-4xl font-black tracking-tight text-white tabular-nums">
                     {kpi.total_visitors}
                   </div>
                   <div className="mt-4 h-16 w-full">
@@ -725,11 +759,11 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                 <div className={cardClasses}>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Quiz Completion</span>
-                    <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-extrabold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
                       {kpi.quiz_completion_rate}% Rate
                     </span>
                   </div>
-                  <div className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                  <div className="mt-2 text-4xl font-black tracking-tight text-white tabular-nums">
                     {kpi.quiz_completes} <span className="text-sm font-semibold text-slate-400">/ {kpi.quiz_starts} started</span>
                   </div>
                   {/* Horizontal milestone progress bars */}
@@ -739,7 +773,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                         <span>Started (Q1)</span>
                         <span>100%</span>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mt-0.5">
                         <div className="h-full bg-indigo-400 rounded-full" style={{ width: '100%' }} />
                       </div>
                     </div>
@@ -748,7 +782,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                         <span>Mid-Quiz (Q8)</span>
                         <span>{Math.round(Math.max(kpi.quiz_completion_rate * 1.3, 20))}%</span>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mt-0.5">
                         <div
                           className="h-full bg-sky-400 rounded-full"
                           style={{ width: `${Math.min(100, Math.round(Math.max(kpi.quiz_completion_rate * 1.3, 20)))}%` }}
@@ -760,7 +794,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                         <span>Completed (Q15)</span>
                         <span>{kpi.quiz_completion_rate}%</span>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mt-0.5">
                         <div
                           className="h-full bg-teal-400 rounded-full"
                           style={{ width: `${kpi.quiz_completion_rate}%` }}
@@ -777,14 +811,14 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                     <span
                       className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${
                         kpi.accounts_change >= 0
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-rose-500/10 text-rose-400'
                       }`}
                     >
                       {kpi.accounts_change >= 0 ? `+${kpi.accounts_change}%` : `${kpi.accounts_change}%`}
                     </span>
                   </div>
-                  <div className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                  <div className="mt-2 text-4xl font-black tracking-tight text-white tabular-nums">
                     {kpi.accounts_created}
                   </div>
                   <div className="mt-4 h-16 w-full">
@@ -802,38 +836,38 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                 {/* Large Center Area Chart Card (span 2) */}
                 <div className={`${cardClasses} lg:col-span-2 flex flex-col justify-between`}>
                   <div>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
                       <div>
-                        <div className="text-base font-black text-slate-900 dark:text-white">Active Traffic &amp; Progression</div>
+                        <div className="text-base font-black text-white">Active Traffic &amp; Progression</div>
                         <div className="text-xs text-slate-400">Sessions vs Quiz Activity vs Completed Attempts</div>
                       </div>
                       <div className="flex items-center gap-4 text-xs font-bold">
                         <span className="flex items-center gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
-                          <span className="text-slate-600 dark:text-slate-300">Sessions</span>
+                          <span className="text-slate-300">Sessions</span>
                         </span>
                         <span className="flex items-center gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
-                          <span className="text-slate-600 dark:text-slate-300">Quiz Active</span>
+                          <span className="text-slate-300">Quiz Active</span>
                         </span>
                         <span className="flex items-center gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full bg-teal-400" />
-                          <span className="text-slate-600 dark:text-slate-300">Completed</span>
+                          <span className="text-slate-300">Completed</span>
                         </span>
                       </div>
                     </div>
 
                     {/* Headline numbers inside area card */}
                     <div className="grid grid-cols-3 gap-4 my-4 text-center">
-                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                      <div className="p-2.5 rounded-xl bg-slate-800/40">
                         <div className="text-xl font-black text-indigo-500">{kpi.total_sessions}</div>
                         <div className="text-[10px] uppercase font-bold text-slate-400">Total Sessions</div>
                       </div>
-                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                      <div className="p-2.5 rounded-xl bg-slate-800/40">
                         <div className="text-xl font-black text-sky-500">{kpi.quiz_starts}</div>
                         <div className="text-[10px] uppercase font-bold text-slate-400">Quiz Starts</div>
                       </div>
-                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                      <div className="p-2.5 rounded-xl bg-slate-800/40">
                         <div className="text-xl font-black text-teal-500">{kpi.quiz_completes}</div>
                         <div className="text-[10px] uppercase font-bold text-slate-400">Completes</div>
                       </div>
@@ -846,26 +880,23 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                   </div>
 
                   {/* Device Breakdown sub-section (matching bottom of mockup card) */}
-                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-6">
                       <div className="flex items-center gap-2">
-                        <span className="text-base">💻</span>
                         <div>
-                          <div className="text-xs font-black text-slate-800 dark:text-white">{device.desktop.count}</div>
+                          <div className="text-xs font-black text-white">{device.desktop.count}</div>
                           <div className="text-[10px] text-slate-400">Desktop ({device.desktop.percent}%)</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-base">📱</span>
                         <div>
-                          <div className="text-xs font-black text-slate-800 dark:text-white">{device.mobile.count}</div>
+                          <div className="text-xs font-black text-white">{device.mobile.count}</div>
                           <div className="text-[10px] text-slate-400">Mobile ({device.mobile.percent}%)</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-base">📟</span>
                         <div>
-                          <div className="text-xs font-black text-slate-800 dark:text-white">{device.tablet.count}</div>
+                          <div className="text-xs font-black text-white">{device.tablet.count}</div>
                           <div className="text-[10px] text-slate-400">Tablet ({device.tablet.percent}%)</div>
                         </div>
                       </div>
@@ -878,16 +909,16 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
 
                 {/* Right Column: Hexagonal Radar Chart Widget */}
                 <div className={`${cardClasses} flex flex-col justify-between`}>
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">Engagement Radar</span>
-                    <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-full">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <span className="text-xs font-black uppercase tracking-wider text-white">Engagement Radar</span>
+                    <span className="text-[10px] font-bold text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-full">
                       6 Pillars
                     </span>
                   </div>
                   <div className="py-2 flex items-center justify-center">
                     <RadarSpiderChart data={metrics?.radar_data || []} size={210} />
                   </div>
-                  <div className="flex justify-around pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500">
+                  <div className="flex justify-around pt-3 border-t border-slate-800 text-[11px] text-slate-500">
                     <span className="flex items-center gap-1.5 font-bold">
                       <span className="h-2 w-2 rounded-full bg-teal-400" />
                       Current
@@ -909,28 +940,28 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                     <span
                       className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${
                         kpi.duration_change >= 0
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-rose-500/10 text-rose-400'
                       }`}
                     >
                       {kpi.duration_change >= 0 ? `+${kpi.duration_change}%` : `${kpi.duration_change}%`}
                     </span>
                   </div>
-                  <div className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                  <div className="mt-2 text-4xl font-black tracking-tight text-white tabular-nums">
                     {kpi.avg_duration_formatted}
                   </div>
                   <p className="mt-1 text-xs text-slate-400">Active engagement time measured via heartbeat</p>
 
-                  <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2 text-center">
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40">
-                      <div className="text-xs font-black text-slate-700 dark:text-slate-300">&lt; 1m</div>
+                  <div className="mt-5 pt-4 border-t border-slate-800 grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2 rounded-lg bg-slate-800/40">
+                      <div className="text-xs font-black text-slate-300">&lt; 1m</div>
                       <div className="text-[9px] text-slate-400">Bounce</div>
                     </div>
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40">
+                    <div className="p-2 rounded-lg bg-slate-800/40">
                       <div className="text-xs font-black text-sky-500">1 - 5m</div>
                       <div className="text-[9px] text-slate-400">Core Quiz</div>
                     </div>
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40">
+                    <div className="p-2 rounded-lg bg-slate-800/40">
                       <div className="text-xs font-black text-indigo-500">&gt; 5m</div>
                       <div className="text-[9px] text-slate-400">Deep Read</div>
                     </div>
@@ -948,25 +979,25 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                     <div className="space-y-1.5 text-xs">
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
-                        <span className="text-slate-600 dark:text-slate-400">
+                        <span className="text-slate-400">
                           Guest ({metrics?.user_distribution?.guest_sessions || 0})
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 rounded-full bg-teal-400" />
-                        <span className="text-slate-600 dark:text-slate-400">
+                        <span className="text-slate-400">
                           Free ({metrics?.user_distribution?.registered_free || 0})
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                        <span className="text-slate-600 dark:text-slate-400">
+                        <span className="text-slate-400">
                           PRO+ ({metrics?.user_distribution?.pro_users || 0})
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 text-center">
+                  <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] text-slate-400 text-center">
                     Registered users have cloud persistence for quiz attempts
                   </div>
                 </div>
@@ -979,7 +1010,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                   <div className="space-y-3.5">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-black text-slate-800 dark:text-white">{kpi.total_visitors} Visitors</div>
+                        <div className="text-sm font-black text-white">{kpi.total_visitors} Visitors</div>
                         <div className="text-[10px] text-emerald-500 font-bold">+{kpi.visitors_change}% trend</div>
                       </div>
                       <MiniSparkline
@@ -989,7 +1020,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-black text-slate-800 dark:text-white">{kpi.avg_duration_formatted}</div>
+                        <div className="text-sm font-black text-white">{kpi.avg_duration_formatted}</div>
                         <div className="text-[10px] text-sky-500 font-bold">Time on Site</div>
                       </div>
                       <MiniSparkline
@@ -999,7 +1030,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-black text-slate-800 dark:text-white">{kpi.quiz_completion_rate}% Completion</div>
+                        <div className="text-sm font-black text-white">{kpi.quiz_completion_rate}% Completion</div>
                         <div className="text-[10px] text-teal-500 font-bold">Funnel conversion</div>
                       </div>
                       <MiniSparkline
@@ -1017,9 +1048,9 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
           {tab === 'funnel' && (
             <div className="space-y-6">
               <div className={cardClasses}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
                   <div>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white">Step-by-Step Question Progression</h2>
+                    <h2 className="text-lg font-black text-white">Step-by-Step Question Progression</h2>
                     <p className="text-xs text-slate-400">See exactly which questions cause drop-off or engagement.</p>
                   </div>
                   <div className="flex gap-4 text-xs font-bold">
@@ -1032,23 +1063,23 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                 {/* Milestone progression bars */}
                 <div className="mt-6 space-y-4">
                   {(funnel?.milestones || []).map((m, idx) => (
-                    <div key={m.id} className="p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/30">
+                    <div key={m.id} className="p-3.5 rounded-xl border border-slate-800 bg-slate-800/30">
                       <div className="flex items-center justify-between text-xs font-bold mb-1.5">
                         <div className="flex items-center gap-2">
                           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-500/20 text-sky-500 text-[10px] font-black">
                             {idx + 1}
                           </span>
-                          <span className="text-slate-800 dark:text-white">{m.label}</span>
+                          <span className="text-white">{m.label}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-slate-400 font-normal">{m.count} users</span>
-                          <span className="font-black text-sky-600 dark:text-sky-400">{m.overall_conversion}%</span>
+                          <span className="font-black text-sky-400">{m.overall_conversion}%</span>
                           {idx > 0 && m.drop_off_count > 0 && (
                             <span className="text-[11px] text-rose-500 font-medium">(-{m.drop_off_count} dropped)</span>
                           )}
                         </div>
                       </div>
-                      <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-sky-400 to-indigo-500 rounded-full transition-all duration-500"
                           style={{ width: `${m.overall_conversion}%` }}
@@ -1058,22 +1089,22 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                   ))}
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="mt-6 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                    <div className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    <div className="text-xs font-bold uppercase tracking-wider text-emerald-400">
                       Avg Time to Complete Quiz
                     </div>
-                    <div className="mt-1 text-2xl font-black text-slate-800 dark:text-white">
+                    <div className="mt-1 text-2xl font-black text-white">
                       {Math.round((funnel?.summary?.avg_completed_duration_seconds || 0) / 60)} min{' '}
                       {Math.round((funnel?.summary?.avg_completed_duration_seconds || 0) % 60)} sec
                     </div>
                     <p className="mt-1 text-[11px] text-slate-400">For students who finish all 15 questions</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
                     <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
                       Avg Time for Incomplete Sessions
                     </div>
-                    <div className="mt-1 text-2xl font-black text-slate-800 dark:text-white">
+                    <div className="mt-1 text-2xl font-black text-white">
                       {Math.round((funnel?.summary?.avg_incomplete_duration_seconds || 0) / 60)} min{' '}
                       {Math.round((funnel?.summary?.avg_incomplete_duration_seconds || 0) % 60)} sec
                     </div>
@@ -1088,9 +1119,9 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
           {tab === 'sessions' && (
             <div className="space-y-6">
               <div className={cardClasses}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                   <div>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white">Recent User Sessions</h2>
+                    <h2 className="text-lg font-black text-white">Recent User Sessions</h2>
                     <p className="text-xs text-slate-400">Detailed logs of visitors, devices, duration, and progress.</p>
                   </div>
                   <div className="w-full sm:w-72">
@@ -1099,7 +1130,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                       placeholder="Search session ID, email, OS…"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-white"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-sky-500 text-white"
                     />
                   </div>
                 </div>
@@ -1108,7 +1139,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      <tr className="border-b border-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-400">
                         <th className="py-3 px-3">Session ID</th>
                         <th className="py-3 px-3">User</th>
                         <th className="py-3 px-3">Device / OS</th>
@@ -1118,16 +1149,16 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                         <th className="py-3 px-3">Timestamp</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    <tbody className="divide-y divide-slate-800/60">
                       {(sessionsData?.sessions || []).map((s) => (
-                        <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-                          <td className="py-3 px-3 font-mono font-medium text-slate-600 dark:text-slate-300">
+                        <tr key={s.id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-3 px-3 font-mono font-medium text-slate-300">
                             {s.session_id.substring(0, 16)}…
                           </td>
                           <td className="py-3 px-3">
                             {s.user_email ? (
                               <div>
-                                <span className="font-bold text-slate-800 dark:text-white">{s.user_name || s.user_email}</span>
+                                <span className="font-bold text-white">{s.user_name || s.user_email}</span>
                                 {s.is_pro && (
                                   <span className="ml-1.5 text-[10px] font-black text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
                                     PRO+
@@ -1139,22 +1170,22 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                             )}
                           </td>
                           <td className="py-3 px-3">
-                            <span className="capitalize font-medium text-slate-700 dark:text-slate-300">
+                            <span className="capitalize font-medium text-slate-300">
                               {s.device_type}
                             </span>{' '}
                             <span className="text-slate-400">· {s.browser} on {s.os}</span>
                           </td>
-                          <td className="py-3 px-3 font-bold text-slate-800 dark:text-white">
+                          <td className="py-3 px-3 font-bold text-white">
                             {Math.floor(s.duration_seconds / 60)}m {s.duration_seconds % 60}s
                           </td>
                           <td className="py-3 px-3">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">
                               Step {s.max_quiz_step}
                             </span>
                           </td>
                           <td className="py-3 px-3">
                             {s.quiz_completed ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                              <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
                                 ✓ Yes
                               </span>
                             ) : (
@@ -1183,9 +1214,9 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
           {tab === 'events' && (
             <div className="space-y-6">
               <div className={cardClasses}>
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
                   <div>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white">Recent Telemetry Events</h2>
+                    <h2 className="text-lg font-black text-white">Recent Telemetry Events</h2>
                     <p className="text-xs text-slate-400">Stream of discrete interactions recorded on the site.</p>
                   </div>
                   <span className="text-xs font-bold text-sky-500 bg-sky-500/10 px-3 py-1 rounded-full">
@@ -1197,23 +1228,23 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                   {eventsData.map((ev) => (
                     <div
                       key={ev.id}
-                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 text-xs"
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border border-slate-800 bg-slate-800/30 text-xs"
                     >
                       <div className="flex items-center gap-3">
                         <span
                           className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-black uppercase ${
                             ev.event_type === 'quiz_complete'
-                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                              ? 'bg-emerald-500/20 text-emerald-400'
                               : ev.event_type === 'quiz_step'
-                              ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400'
+                              ? 'bg-sky-500/20 text-sky-400'
                               : ev.event_type === 'account_created'
-                              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
-                              : 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400'
+                              ? 'bg-amber-500/20 text-amber-400'
+                              : 'bg-indigo-500/20 text-indigo-400'
                           }`}
                         >
                           {ev.event_type}
                         </span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                        <span className="font-semibold text-slate-200">
                           {ev.page || '/'}
                         </span>
                         {ev.user_email && (

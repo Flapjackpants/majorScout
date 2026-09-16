@@ -127,7 +127,7 @@ export default function Landing({
                 onClick={() => onOpenProFeatures()}
                 className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-6 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 shadow-xl shadow-amber-400/25 transition hover:scale-105 hover:shadow-amber-400/40 animate-pulse"
               >
-                <span>✨</span> Access PRO+ Features & Essay Help →
+                Access PRO+ Features & Essay Help →
               </button>
             </div>
           )}

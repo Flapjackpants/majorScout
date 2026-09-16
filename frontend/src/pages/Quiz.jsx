@@ -17,7 +17,7 @@ function AiQuestionsPaywall({ open, user, busy, error, onUnlock, onContinue, onN
       <div className="animate-fade-up w-full max-w-lg rounded-3xl border border-amber-400/30 bg-gradient-to-b from-slate-900 to-slate-950 p-7 shadow-2xl shadow-amber-500/10">
         <div className="flex items-center justify-between">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950 shadow-sm">
-            <span>⚡</span> PRO+
+            PRO+
           </div>
           <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
             Quiz complete

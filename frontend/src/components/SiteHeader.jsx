@@ -90,17 +90,17 @@ export default function SiteHeader({
                   className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/40 bg-sky-500/15 px-3 py-1.5 text-xs font-bold text-sky-200 shadow-sm transition hover:scale-105 hover:bg-sky-500/25 hover:border-sky-400"
                   title="Open Admin Analytics Dashboard"
                 >
-                  <svg className="h-3.5 w-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="h-3.5 w-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <line x1="18" y1="20" x2="18" y2="10" />
                     <line x1="12" y1="20" x2="12" y2="4" />
                     <line x1="6" y1="20" x2="6" y2="14" />
                   </svg>
-                  <span className="hidden sm:inline">Admin</span> Dashboard
+                  Admin
                 </button>
               )}
               {unlockedBadge && (
                 <span className="hidden rounded-full bg-amber-400/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300 sm:inline">
-                  ⚡ PRO+
+                  PRO+
                 </span>
               )}
               {onOpenProFeatures && user.is_pro && (
@@ -108,7 +108,7 @@ export default function SiteHeader({
                   onClick={() => onOpenProFeatures()}
                   className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-3.5 py-1.5 text-xs font-black uppercase tracking-wider text-slate-950 shadow-md shadow-amber-400/25 transition hover:scale-105 hover:shadow-amber-400/40"
                 >
-                  <span>✨</span> PRO+ Features & Essay Help
+                  PRO+ Features
                 </button>
               )}
               {onAdmissions && (
@@ -137,7 +137,7 @@ export default function SiteHeader({
                     title="PRO+ Account Active"
                     className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider text-slate-950 shadow-md shadow-amber-400/25 ring-1 ring-amber-300/50"
                   >
-                    <span>⚡</span> PRO+
+                    PRO+
                   </span>
                 )}
               </div>
