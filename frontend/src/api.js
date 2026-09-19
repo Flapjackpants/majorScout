@@ -216,10 +216,9 @@ export async function fetchAdminFunnel(range = '7d') {
   return jsonOrThrow(res, 'Could not load quiz funnel data')
 }
 
-export async function fetchAdminSessions({ page = 1, limit = 25, search = '', device = '', range = '7d' } = {}) {
+export async function fetchAdminSessions({ page = 1, search = '', device = '', range = '7d' } = {}) {
   const params = new URLSearchParams()
   params.set('page', page)
-  params.set('limit', limit)
   params.set('range', range)
   if (search) params.set('search', search)
   if (device) params.set('device', device)

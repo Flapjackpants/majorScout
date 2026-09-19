@@ -478,7 +478,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
       const [m, f, s, e] = await Promise.all([
         fetchAdminMetrics(range).catch(() => null),
         fetchAdminFunnel(range).catch(() => null),
-        fetchAdminSessions({ page: 1, limit: 25, search: searchQuery, range }).catch(() => ({ sessions: [], total: 0 })),
+        fetchAdminSessions({ page: 1, search: searchQuery, range }).catch(() => ({ sessions: [], total: 0 })),
         fetchAdminEvents({ limit: 50 }).catch(() => ({ events: [] })),
       ])
       if (m) setMetrics(m)
@@ -1082,21 +1082,26 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                     <h2 className="text-lg font-black text-white">Recent User Sessions</h2>
                     <p className="text-xs text-slate-400">Detailed logs of visitors, devices, duration, and progress.</p>
                   </div>
-                  <div className="w-full sm:w-72">
-                    <input
-                      type="text"
-                      placeholder="Search session ID, email, OS…"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-sky-500 text-white"
-                    />
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <span className="text-xs font-bold text-sky-500 bg-sky-500/10 px-3 py-1 rounded-full shrink-0">
+                      {sessionsData?.total ?? 0} Sessions
+                    </span>
+                    <div className="w-full sm:w-72">
+                      <input
+                        type="text"
+                        placeholder="Search session ID, email, OS…"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-sky-500 text-white"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Sessions Table */}
-                <div className="mt-4 overflow-x-auto">
+                <div className="mt-4 max-h-[70vh] overflow-auto">
                   <table className="w-full text-left text-xs">
-                    <thead>
+                    <thead className="sticky top-0 bg-slate-900 z-10">
                       <tr className="border-b border-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-400">
                         <th className="py-3 px-3">Session ID</th>
                         <th className="py-3 px-3">User</th>

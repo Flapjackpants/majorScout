@@ -1964,7 +1964,9 @@ def admin_funnel(user):
 @admin_required
 def admin_sessions(user):
     page = max(1, int(request.args.get("page", 1)))
-    limit = max(5, min(100, int(request.args.get("limit", 25))))
+    # No artificial small cap — admin UI loads the full timeframe window.
+    # Optional limit still supported; omit or set very high to return all matches.
+    limit_arg = request.args.get("limit")
     search = str(request.args.get("search") or "").strip().lower()
     device = str(request.args.get("device") or "").strip().lower()
     range_param = request.args.get("range", "7d").lower()
@@ -2002,12 +2004,15 @@ def admin_sessions(user):
             )
 
         total = q.count()
-        rows = (
-            q.order_by(AnalyticsSession.last_active_at.desc())
-            .offset((page - 1) * limit)
-            .limit(limit)
-            .all()
-        )
+        q = q.order_by(AnalyticsSession.last_active_at.desc())
+
+        if limit_arg is None:
+            rows = q.all()
+            limit = total or 1
+            page = 1
+        else:
+            limit = max(1, min(10000, int(limit_arg)))
+            rows = q.offset((page - 1) * limit).limit(limit).all()
 
         results = []
         for sess, u in rows:
@@ -2022,7 +2027,7 @@ def admin_sessions(user):
             "total": total,
             "page": page,
             "limit": limit,
-            "pages": (total + limit - 1) // limit,
+            "pages": (total + limit - 1) // limit if limit else 1,
         })
     finally:
         db.close()
