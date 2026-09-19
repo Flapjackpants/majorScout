@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  deleteAdminDemo,
   fetchAdminEvents,
   fetchAdminFunnel,
   fetchAdminMetrics,
   fetchAdminSessions,
-  seedAdminDemo,
   startGoogleLogin,
 } from '../api.js'
 
@@ -468,7 +466,6 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
   const [range, setRange] = useState('7d') // 'today' | '7d' | '30d' | 'all'
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
-  const [seeding, setSeeding] = useState(false)
   const [metrics, setMetrics] = useState(null)
   const [funnel, setFunnel] = useState(null)
   const [sessionsData, setSessionsData] = useState({ sessions: [], total: 0, page: 1, pages: 1 })
@@ -496,27 +493,6 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
   useEffect(() => {
     loadAllData()
   }, [loadAllData])
-
-  async function handleSeedDemo() {
-    setSeeding(true)
-    try {
-      await seedAdminDemo()
-      await loadAllData()
-    } finally {
-      setSeeding(false)
-    }
-  }
-
-  async function handleDeleteDemo() {
-    if (!window.confirm('Remove seeded demo sessions and events?')) return
-    setSeeding(true)
-    try {
-      await deleteAdminDemo()
-      await loadAllData()
-    } finally {
-      setSeeding(false)
-    }
-  }
 
   // Unauthorized view
   if (!user || !user.is_admin) {
@@ -645,24 +621,6 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
                 <div className="text-xs font-bold truncate text-white">{user.name || 'Admin'}</div>
                 <div className="text-[10px] text-slate-400 truncate">{user.email}</div>
               </div>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleSeedDemo}
-                disabled={seeding}
-                className="flex-1 rounded-lg border border-sky-400/40 bg-sky-500/10 px-2 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/20 disabled:opacity-50 transition"
-              >
-                {seeding ? 'Seeding…' : 'Seed Demo Data'}
-              </button>
-              <button
-                onClick={handleDeleteDemo}
-                disabled={seeding}
-                className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition"
-                title="Clear demo data"
-              >
-                Clear
-              </button>
             </div>
 
             <button
@@ -1203,7 +1161,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
 
                 {sessionsData.sessions.length === 0 && (
                   <div className="text-center py-12 text-slate-400 text-xs">
-                    No sessions recorded matching this filter. Click &ldquo;Seed Demo Data&rdquo; in the sidebar to populate realistic sample data.
+                    No sessions recorded matching this filter.
                   </div>
                 )}
               </div>
@@ -1264,7 +1222,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
 
                   {eventsData.length === 0 && (
                     <div className="text-center py-12 text-slate-400 text-xs">
-                      No events recorded yet. Start exploring or taking the quiz, or click &ldquo;Seed Demo Data&rdquo;.
+                      No events recorded yet. Start exploring or taking the quiz.
                     </div>
                   )}
                 </div>
