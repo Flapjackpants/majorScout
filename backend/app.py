@@ -1967,12 +1967,24 @@ def admin_sessions(user):
     limit = max(5, min(100, int(request.args.get("limit", 25))))
     search = str(request.args.get("search") or "").strip().lower()
     device = str(request.args.get("device") or "").strip().lower()
+    range_param = request.args.get("range", "7d").lower()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if range_param == "today":
+        start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif range_param == "30d":
+        start_time = now - timedelta(days=30)
+    elif range_param == "all":
+        start_time = datetime(2020, 1, 1)
+    else:
+        start_time = now - timedelta(days=7)
 
     db = get_session()
     try:
         q = db.query(AnalyticsSession, User).outerjoin(
             User, AnalyticsSession.user_id == User.id
         )
+
+        q = q.filter(AnalyticsSession.started_at >= start_time)
 
         if device in ("desktop", "mobile", "tablet"):
             q = q.filter(AnalyticsSession.device_type == device)

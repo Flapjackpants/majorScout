@@ -481,7 +481,7 @@ export default function AdminDashboard({ user, onHome, _onRefreshUser, _onStartQ
       const [m, f, s, e] = await Promise.all([
         fetchAdminMetrics(range).catch(() => null),
         fetchAdminFunnel(range).catch(() => null),
-        fetchAdminSessions({ page: 1, limit: 25, search: searchQuery }).catch(() => ({ sessions: [], total: 0 })),
+        fetchAdminSessions({ page: 1, limit: 25, search: searchQuery, range }).catch(() => ({ sessions: [], total: 0 })),
         fetchAdminEvents({ limit: 50 }).catch(() => ({ events: [] })),
       ])
       if (m) setMetrics(m)
